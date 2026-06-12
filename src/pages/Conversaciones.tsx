@@ -29,37 +29,34 @@ export default function Conversaciones() {
   const { tenant } = useAuth();
   const [hours, setHours] = useState(24);
   const real = useRealMetrics(tenant?.apiSlug, hours);
-
   if (!tenant) return null;
-
-  const isRefreshing = real.loading && !real.messages;
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Conversaciones"
-        description={`${tenant.name} — ${tenant.verticalLabel}.`}
-      />
+      <SectionHeader title="Conversaciones" description={`${tenant.name} — ${tenant.verticalLabel}.`} />
 
-      {/* KPIs */}
+      {/* Cada KPI carga de forma independiente */}
       <div className="grid gap-4 sm:grid-cols-3">
-        {real.loading ? (
-          <><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /></>
-        ) : (
-          <>
-            <KpiCard label="Total mensajes"    value={real.messages}     icon={MessageSquare} accent="primary" />
-            <KpiCard label="Conversaciones"    value={real.activeConvos} icon={Sparkles}      accent="info" />
-            <KpiCard label="Atención humana"   value={real.human}        icon={Repeat}        accent="accent" suffix="%" />
-          </>
-        )}
+        {real.messagesLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Total mensajes"  value={real.messages}     icon={MessageSquare} accent="primary" />
+        }
+        {real.convosLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Conversaciones"  value={real.activeConvos} icon={Sparkles}      accent="info" />
+        }
+        {real.automationLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Atención humana" value={real.human}        icon={Repeat}        accent="accent" suffix="%" />
+        }
       </div>
 
-      {/* Distribución de conversaciones */}
+      {/* Gráficos de distribución — carga independiente */}
       <div className="premium-card p-5">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">Distribución de conversaciones</h3>
-            {isRefreshing && <RefreshCw className="w-3 h-3 text-muted-foreground animate-spin" />}
+            {real.chartsLoading && <RefreshCw className="w-3 h-3 text-muted-foreground animate-spin" />}
           </div>
           <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
             {TIME_RANGES.map(r => (

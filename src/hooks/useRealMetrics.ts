@@ -1,17 +1,8 @@
 /**
- * useRealMetrics — datos reales desde https://umeia.space
+ * useRealMetrics — cada métrica se resuelve y renderiza de forma independiente.
  *
- * Estrategia de dos velocidades:
- *  - KPIs  (chat, webhooks, kommo, messages_by_day): se piden siempre, 
- *    reflejan la ventana de tiempo seleccionada por el usuario.
- *  - Charts (by_channel, by_hour, by_intent): se piden en un solo request
- *    combinado (/metrics/chat/charts) para minimizar round-trips.
- *    Tienen cache de 5 min en el backend.
- *
- * ─── CORS en producción ───────────────────────────────────────────────
- * El backend debe incluir:
- *   Access-Control-Allow-Origin: https://client-insights.umeia.io
- * ─────────────────────────────────────────────────────────────────────
+ * Cada fetch actualiza el estado en cuanto termina, sin esperar a los demás.
+ * Si kommo_leads tarda 8s, los KPIs de chat ya aparecen en 300ms.
  */
 
 import { useEffect, useState } from "react";
@@ -26,122 +17,144 @@ export interface ChannelPoint { name: string; value: number; }
 export interface HourPoint    { hour: string; value: number; }
 
 export interface RealMetrics {
-  messages: number | null;
-  activeConvos: number | null;
-  automation: number | null;
-  human: number | null;
-  leads: number | null;
+  // Cada campo tiene su propio estado de carga
+  messages:      number | null;
+  messagesLoading:      boolean;
+
+  activeConvos:  number | null;
+  convosLoading:        boolean;
+
+  automation:    number | null;
+  human:         number | null;
+  automationLoading:    boolean;
+
+  leads:         number | null;
+  leadsLoading:         boolean;
+
   messagesByDay: DayPoint[];
-  byIntent: IntentPoint[];
-  byChannel: ChannelPoint[];
-  byHour: HourPoint[];
-  loading: boolean;         // true mientras cargan los KPIs (bloquea KPI cards)
-  chartsLoading: boolean;   // true mientras carga el endpoint combinado de charts
-  error: boolean;
-  corsBlocked: boolean;
+  messagesByDayLoading: boolean;
+
+  byChannel:     ChannelPoint[];
+  byHour:        HourPoint[];
+  byIntent:      IntentPoint[];
+  chartsLoading:        boolean;
+
+  // Atajos para compatibilidad — true solo si TODO sigue cargando
+  loading:       boolean;
+  error:         boolean;
 }
 
-async function fetchJson<T>(url: string): Promise<{ data: T | null; corsBlocked: boolean }> {
+const EMPTY: RealMetrics = {
+  messages: null,      messagesLoading:      true,
+  activeConvos: null,  convosLoading:        true,
+  automation: null,
+  human: null,         automationLoading:    true,
+  leads: null,         leadsLoading:         true,
+  messagesByDay: [],   messagesByDayLoading: true,
+  byChannel: [],
+  byHour: [],
+  byIntent: [],        chartsLoading:        true,
+  loading: true,
+  error: false,
+};
+
+async function get<T>(url: string): Promise<T | null> {
   try {
     const res = await fetch(url);
-    if (!res.ok) return { data: null, corsBlocked: false };
-    return { data: (await res.json()) as T, corsBlocked: false };
-  } catch {
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch (err) {
     const isCors = !import.meta.env.DEV && API_BASE.startsWith("http");
     if (isCors) {
       console.warn(
-        `[useRealMetrics] Sin acceso a ${new URL(url).pathname} — ` +
+        `[metrics] Sin acceso a ${new URL(url).pathname} — ` +
         `el backend necesita: Access-Control-Allow-Origin: ${window.location.origin}`
       );
     }
-    return { data: null, corsBlocked: isCors };
+    return null;
   }
 }
 
-interface ChatMetrics   { total_conversations: number; total_inbound: number; auto_response_rate: number | null; by_intent: Record<string, number>; }
-interface WebhookTenant { total: number | null; }
-interface KommoResponse { tenants: { tenant_id: string; leads_count: number | null }[] }
-interface DayResp       { days: DayPoint[]; }
-interface ChartsResp    { by_channel: ChannelPoint[]; by_hour: HourPoint[]; by_intent: IntentPoint[]; }
-
-const EMPTY: RealMetrics = {
-  messages: null, activeConvos: null, automation: null, human: null, leads: null,
-  messagesByDay: [], byIntent: [], byChannel: [], byHour: [],
-  loading: true, chartsLoading: true, error: false, corsBlocked: false,
-};
+interface ChatResp    { total_conversations: number; total_inbound: number; auto_response_rate: number | null; by_intent: Record<string, number>; }
+interface WebhookResp { total: number | null; }
+interface KommoResp   { tenants: { tenant_id: string; leads_count: number | null }[] }
+interface DayResp     { days: DayPoint[]; }
+interface ChartsResp  { by_channel: ChannelPoint[]; by_hour: HourPoint[]; by_intent: IntentPoint[]; }
 
 export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMetrics {
-  const [metrics, setMetrics] = useState<RealMetrics>(EMPTY);
+  const [m, setM] = useState<RealMetrics>(EMPTY);
 
   useEffect(() => {
     if (!apiSlug) return;
     let cancelled = false;
 
+    // Reset al cambiar tenant/hours
+    setM({ ...EMPTY });
+
     const tid = encodeURIComponent(apiSlug);
     const h   = encodeURIComponent(hours);
 
-    // ── Request 1: KPIs (ventana dinámica según hours) ─────────────────
-    async function loadKpis() {
-      const [chatR, webhooksR, kommoR, byDayR] = await Promise.all([
-        fetchJson<ChatMetrics>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`),
-        fetchJson<WebhookTenant>(`${API_BASE}/api/metrics/webhooks_by_tenant?tenant_id=${tid}&hours=24`),
-        fetchJson<KommoResponse>(`${API_BASE}/api/metrics/kommo_leads`),
-        fetchJson<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=14`),
-      ]);
+    // Helper: patch parcial del estado sin pisar otros campos
+    const patch = (update: Partial<RealMetrics>) => {
       if (cancelled) return;
+      setM(prev => {
+        const next = { ...prev, ...update };
+        // Recalcular loading global
+        next.loading = next.messagesLoading || next.convosLoading ||
+          next.automationLoading || next.leadsLoading ||
+          next.messagesByDayLoading || next.chartsLoading;
+        return next;
+      });
+    };
 
-      const chat     = chatR.data;
-      const webhooks = webhooksR.data;
-      const kommo    = kommoR.data;
-      const byDay    = byDayR.data;
-      const corsBlocked = [chatR, webhooksR, kommoR, byDayR].every(r => r.corsBlocked);
-      const autoRate = chat?.auto_response_rate ?? null;
-      const tenantLead = kommo?.tenants?.find(k => k.tenant_id === apiSlug);
+    // ── 1. Chat KPIs (mensajes + automation + convos) ─────────────────
+    // Un solo fetch cubre tres métricas — las tres se marcan done juntas
+    get<ChatResp>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`)
+      .then(chat => {
+        const autoRate = chat?.auto_response_rate ?? null;
+        patch({
+          messages:          chat?.total_inbound ?? null,
+          messagesLoading:   false,
+          activeConvos:      chat?.total_conversations ?? null,
+          convosLoading:     false,
+          automation:        autoRate !== null ? Math.round(autoRate * 100)        : null,
+          human:             autoRate !== null ? Math.round((1 - autoRate) * 100)  : null,
+          automationLoading: false,
+        });
+      });
 
-      setMetrics(m => ({
-        ...m,
-        messages:     chat?.total_inbound ?? webhooks?.total ?? null,
-        activeConvos: chat?.total_conversations ?? null,
-        automation:   autoRate !== null ? Math.round(autoRate * 100) : null,
-        human:        autoRate !== null ? Math.round((1 - autoRate) * 100) : null,
-        leads:        tenantLead?.leads_count ?? null,
-        messagesByDay: byDay?.days ?? [],
-        loading:      false,
-        error:        !chat && !webhooks && !corsBlocked,
-        corsBlocked,
-      }));
-    }
+    // ── 2. Leads (Kommo) — puede ser lento, no bloquea a nadie ────────
+    get<KommoResp>(`${API_BASE}/api/metrics/kommo_leads`)
+      .then(kommo => {
+        const entry = kommo?.tenants?.find(k => k.tenant_id === apiSlug);
+        patch({
+          leads:        entry?.leads_count ?? null,
+          leadsLoading: false,
+        });
+      });
 
-    // ── Request 2: Charts combinado (endpoint con cache 5 min) ─────────
-    // Usa siempre hours=720 (30d) para aprovechar el cache del backend.
-    // El usuario ve data de todo el mes en los gráficos de distribución,
-    // que es lo más útil independientemente del rango de KPIs seleccionado.
-    async function loadCharts() {
-      const r = await fetchJson<ChartsResp>(
-        `${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=720`
-      );
-      if (cancelled) return;
+    // ── 3. Mensajes por día ────────────────────────────────────────────
+    get<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=14`)
+      .then(data => {
+        patch({
+          messagesByDay:        data?.days ?? [],
+          messagesByDayLoading: false,
+        });
+      });
 
-      if (r.data) {
-        setMetrics(m => ({
-          ...m,
-          byChannel:     r.data!.by_channel,
-          byHour:        r.data!.by_hour,
-          byIntent:      r.data!.by_intent,
+    // ── 4. Charts combinado (por canal + hora + intención) ────────────
+    get<ChartsResp>(`${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=720`)
+      .then(data => {
+        patch({
+          byChannel:     data?.by_channel ?? [],
+          byHour:        data?.by_hour    ?? [],
+          byIntent:      data?.by_intent  ?? [],
           chartsLoading: false,
-        }));
-      } else {
-        setMetrics(m => ({ ...m, chartsLoading: false }));
-      }
-    }
-
-    // Lanzar ambos en paralelo pero de forma independiente
-    setMetrics({ ...EMPTY });
-    loadKpis();
-    loadCharts();
+        });
+      });
 
     return () => { cancelled = true; };
   }, [apiSlug, hours]);
 
-  return metrics;
+  return m;
 }

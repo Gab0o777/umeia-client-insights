@@ -3,15 +3,10 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
-import {
-  MessageSquare, Activity, Bot, User, Target,
-  Clock, Wifi, Cloud, Database, Sparkles,
-} from "lucide-react";
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
+import { MessageSquare, Activity, Bot, User, Target, Wifi, Cloud, Database, Sparkles } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { cn } from "@/lib/utils";
-import { KpiSkeleton, ChartSkeleton, Skeleton } from "@/components/Skeleton";
+import { KpiSkeleton, ChartSkeleton } from "@/components/Skeleton";
 
 function StatusPill({ ok, label, sub }: { ok: boolean; label: string; sub?: string }) {
   return (
@@ -31,20 +26,15 @@ function StatusPill({ ok, label, sub }: { ok: boolean; label: string; sub?: stri
 }
 
 const TOOLTIP_STYLE = {
-  background: "hsl(var(--popover))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: 8,
-  fontSize: 12,
+  background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))",
+  borderRadius: 8, fontSize: 12,
 };
 
 export default function Resumen() {
-  const { tenant, user } = useAuth();
+  const { tenant } = useAuth();
   const real = useRealMetrics(tenant?.apiSlug);
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
-
   if (!tenant) return null;
-
-  const hasChartData = real.messagesByDay.length > 0;
 
   return (
     <div className="space-y-6">
@@ -59,49 +49,51 @@ export default function Resumen() {
         }
       />
 
-      {/* KPIs */}
+      {/* Cada KPI card carga de forma independiente */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {real.loading ? (
-          <>
-            <KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton />
-          </>
-        ) : (
-          <>
-            <KpiCard label="Mensajes (24h)"     value={messages}           icon={MessageSquare} accent="primary"
-              subtitle={`sync ${syncLabel}`} />
-            <KpiCard label="Conversaciones"     value={real.activeConvos}  icon={Activity}      accent="info" />
-            <KpiCard label="Automatización"     value={real.automation}    icon={Bot}           accent="accent"
-              suffix="%" subtitle="del total de mensajes" />
-            <KpiCard label="Leads"              value={real.leads}         icon={Target}        accent="success" />
-          </>
-        )}
+        {real.messagesLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Mensajes (24h)"  value={messages}          icon={MessageSquare} accent="primary" subtitle={`sync ${syncLabel}`} />
+        }
+        {real.convosLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Conversaciones"  value={real.activeConvos} icon={Activity}      accent="info" />
+        }
+        {real.automationLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Automatización"  value={real.automation}   icon={Bot}           accent="accent" suffix="%" subtitle="del total de mensajes" />
+        }
+        {real.leadsLoading
+          ? <KpiSkeleton />
+          : <KpiCard label="Leads"           value={real.leads}        icon={Target}        accent="success" />
+        }
       </div>
 
-      {/* Actividad — gráfico mensajes por día */}
+      {/* Gráfico mensajes por día */}
       <div className="premium-card p-5">
         <div className="mb-4">
           <h3 className="text-sm font-semibold">Actividad — últimos 14 días</h3>
           <p className="text-xs text-muted-foreground mt-0.5">Mensajes automáticos vs. humanos</p>
         </div>
-        {real.loading ? (
+        {real.messagesByDayLoading ? (
           <ChartSkeleton height={260} />
-        ) : hasChartData ? (
+        ) : real.messagesByDay.length > 0 ? (
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={real.messagesByDay} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gAuto"  x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}   />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gHuman" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="hsl(var(--accent))"  stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--accent))"  stopOpacity={0}   />
+                    <stop offset="95%" stopColor="hsl(var(--accent))"  stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="day"   stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis               stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <XAxis dataKey="day"  stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <YAxis              stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="auto"  name="Automático" stroke="hsl(var(--primary))" fill="url(#gAuto)"  strokeWidth={2} />
@@ -121,21 +113,19 @@ export default function Resumen() {
         <div className="premium-card p-5">
           <h3 className="text-sm font-semibold mb-4">Estado del sistema</h3>
           <div className="space-y-2.5">
-            <StatusPill ok={tenant.whatsapp.connected} label="WhatsApp"          sub={tenant.whatsapp.number} />
+            <StatusPill ok={tenant.whatsapp.connected} label="WhatsApp"           sub={tenant.whatsapp.number} />
             <StatusPill ok={tenant.whatsapp.cloudApi}  label="WhatsApp Cloud API" sub={tenant.whatsapp.cloudApi ? "Activa" : "No activa"} />
-            <StatusPill ok={true}                      label="Motor UMEIA"        sub="Procesando mensajes" />
-            <StatusPill ok={true}                      label="Base de datos"      sub="Conexión estable" />
+            <StatusPill ok={true}                      label="Motor UMEIA"         sub="Procesando mensajes" />
+            <StatusPill ok={true}                      label="Base de datos"       sub="Conexión estable" />
           </div>
         </div>
-
         <div className="premium-card p-5">
           <h3 className="text-sm font-semibold mb-4">Configuración</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-3">
               {tenant.type === "cloud"
                 ? <Cloud className="w-4 h-4 text-info shrink-0" />
-                : <Database className="w-4 h-4 text-accent shrink-0" />
-              }
+                : <Database className="w-4 h-4 text-accent shrink-0" />}
               <div>
                 <div className="font-medium">{tenant.type === "cloud" ? "Cloud" : "On-Premise"}</div>
                 <div className="text-xs text-muted-foreground">{tenant.whatsapp.mode}</div>
