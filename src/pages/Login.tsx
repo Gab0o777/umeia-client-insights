@@ -20,8 +20,7 @@ export default function Login() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const result = login(email, password);
+    const result = await login(email, password);
     setLoading(false);
     if (result.ok === true) {
       toast.success("Bienvenido al Portal UMEIA");
@@ -33,7 +32,7 @@ export default function Login() {
 
   const fillDemo = (which: "cloud" | "onpremise") => {
     if (which === "cloud") {
-      setEmail("cloud@demo.umeia.io");
+      setEmail("gabo@demo.com");
     } else {
       setEmail("onpremise@demo.umeia.io");
     }
@@ -57,7 +56,7 @@ export default function Login() {
         <section className="hidden lg:block animate-fade-in-up">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 backdrop-blur-md">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span className="text-xs font-medium">Demo comercial · multi-tenant</span>
+            <span className="text-xs font-medium">Portal de clientes · multi-tenant</span>
           </div>
           <h1 className="mt-6 text-5xl font-bold leading-[1.05] tracking-tight">
             Visualizá toda tu operación con <span className="gradient-text">UMEIA</span>.
@@ -140,6 +139,7 @@ export default function Login() {
               </Button>
             </form>
 
+            {/* Demo shortcuts */}
             <div className="mt-6 pt-6 border-t border-border">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                 Usuarios demo
@@ -151,7 +151,7 @@ export default function Login() {
                   className="text-left rounded-lg border border-border p-3 hover:border-primary hover:bg-secondary transition-colors group"
                 >
                   <div className="text-xs font-semibold text-primary">CLOUD</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 truncate">cloud@demo…</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 truncate">gabo@demo.com</div>
                 </button>
                 <button
                   type="button"
