@@ -1,0 +1,112 @@
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  MessagesSquare,
+  Boxes,
+  Settings,
+} from "lucide-react";
+import { Logo } from "@/components/Logo";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+
+const NAV = [
+  { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
+  { to: "/conversaciones", label: "Conversaciones", icon: MessagesSquare },
+  { to: "/modulos", label: "Módulos", icon: Boxes },
+  { to: "/configuracion", label: "Configuración", icon: Settings },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const { tenant, user } = useAuth();
+  const location = useLocation();
+
+  return (
+    <Sidebar collapsible="icon" className="border-r">
+      <SidebarHeader className="px-3 py-3">
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between gap-2")}>
+          {collapsed ? (
+            <SidebarTrigger className="h-8 w-8" />
+          ) : (
+            <>
+              <Logo size="md" />
+              <SidebarTrigger className="h-8 w-8 shrink-0" />
+            </>
+          )}
+        </div>
+      </SidebarHeader>
+
+      {!collapsed && tenant && (
+        <div className="mx-3 mb-3 rounded-xl border border-border bg-gradient-surface p-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "pulse-dot",
+                tenant.type === "cloud" ? "bg-info" : "bg-accent",
+              )}
+            />
+            <span
+              className={cn(
+                "text-[10px] font-bold uppercase tracking-wider",
+                tenant.type === "cloud" ? "text-info" : "text-accent",
+              )}
+            >
+              {tenant.type === "cloud" ? "Cloud" : "On-Premise"}
+            </span>
+          </div>
+          <div className="mt-2 text-sm font-semibold leading-tight">{tenant.name}</div>
+          <div className="text-[11px] text-muted-foreground">{tenant.verticalLabel}</div>
+        </div>
+      )}
+
+      <SidebarContent>
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Navegación</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {NAV.map((item) => {
+                const isActive = item.end
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={isActive}>
+                      <NavLink to={item.to} end={item.end}>
+                        <item.icon className="h-4 w-4" />
+                        {!collapsed && <span>{item.label}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="p-3">
+        {!collapsed && user && (
+          <div className="px-2 py-1">
+            <div className="text-xs font-medium truncate">{user.displayName}</div>
+            <div className="text-[11px] text-muted-foreground truncate">{user.email}</div>
+          </div>
+        )}
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
