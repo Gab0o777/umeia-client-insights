@@ -82,7 +82,7 @@ export default function Infraestructura() {
               <div className="space-y-3">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Integraciones</div>
                 <Node icon={Database} title="CRM" sub="Sincronizado" accent="primary" />
-                <Node icon={Brain} title="IA — OpenAI" sub={tenant.costs.aiModel} accent="accent" />
+                <Node icon={Brain} title="IA — OpenAI" sub="Motor de IA" accent="accent" />
                 <Node icon={Activity} title="Ads tracking" sub="Meta + Google" accent="info" />
               </div>
             </div>
@@ -178,7 +178,7 @@ export default function Infraestructura() {
           </div>
           <div className="text-center">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Sync</div>
-            <div className="text-sm font-semibold">{tenant.whatsapp.lastSync}</div>
+            <div className="text-sm font-semibold">{tenant.whatsapp.mode}</div>
           </div>
           <div className="flex items-center gap-1">
             <span className="pulse-dot bg-success" />
