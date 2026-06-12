@@ -7,7 +7,7 @@ import { KpiSkeleton, ComingSoon } from "@/components/Skeleton";
 
 export default function Automatizacion() {
   const { tenant } = useAuth();
-  const real = useRealMetrics(tenant?.apiSlug);
+  const real = useRealMetrics(tenant?.apiSlug, 24);
   if (!tenant) return null;
   return (
     <div className="space-y-6">

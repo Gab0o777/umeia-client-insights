@@ -4,7 +4,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { MessageSquare, Activity, Bot, User, Target, Wifi, Cloud, Database, Sparkles } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { KpiSkeleton, ChartSkeleton } from "@/components/Skeleton";
 
@@ -32,7 +32,7 @@ const TOOLTIP_STYLE = {
 
 export default function Resumen() {
   const { tenant } = useAuth();
-  const real = useRealMetrics(tenant?.apiSlug);
+  const real = useRealMetrics(tenant?.apiSlug, 24);
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   if (!tenant) return null;
 
@@ -53,7 +53,7 @@ export default function Resumen() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {real.messagesLoading
           ? <KpiSkeleton />
-          : <KpiCard label="Mensajes (24h)"  value={messages}          icon={MessageSquare} accent="primary" subtitle={`sync ${syncLabel}`} />
+          : <KpiCard label="Mensajes"        value={messages}          icon={MessageSquare} accent="primary" subtitle={`últimas 24h · sync ${syncLabel}`} />
         }
         {real.convosLoading
           ? <KpiSkeleton />
@@ -80,25 +80,15 @@ export default function Resumen() {
         ) : real.messagesByDay.length > 0 ? (
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={real.messagesByDay} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gAuto"  x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gHuman" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="hsl(var(--accent))"  stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--accent))"  stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <BarChart data={real.messagesByDay} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="day"  stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis              stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                <YAxis             stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="auto"  name="Automático" stroke="hsl(var(--primary))" fill="url(#gAuto)"  strokeWidth={2} />
-                <Area type="monotone" dataKey="human" name="Humano"     stroke="hsl(var(--accent))"  fill="url(#gHuman)" strokeWidth={2} />
-              </AreaChart>
+                <Bar dataKey="auto"  name="Automático" stackId="a" fill="hsl(var(--primary))"       radius={[0,0,0,0]} />
+                <Bar dataKey="human" name="Humano"     stackId="a" fill="hsl(var(--accent))"  radius={[4,4,0,0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         ) : (
