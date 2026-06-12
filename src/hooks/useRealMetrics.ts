@@ -1,16 +1,23 @@
 /**
  * useRealMetrics — datos reales desde https://umeia.space
  *
- * Recibe el apiSlug del tenant (campo directo en tenants.ts) para evitar
- * el round-trip de resolución via /api/metrics/tenants.
+ * Recibe el apiSlug del tenant para construir las URLs de la API.
  *
- * Endpoints consumidos (todos en paralelo):
- *  1. /api/metrics/chat?tenant_id=X&hours=720       → KPIs + by_intent
- *  2. /api/metrics/webhooks_by_tenant?tenant_id=X   → mensajes 24h
- *  3. /api/metrics/kommo_leads                      → leads por tenant
- *  4. /api/metrics/messages_by_day?tenant_id=X      → gráfico diario
- *  5. /api/metrics/chat/by_channel?tenant_id=X      → distribución canal
- *  6. /api/metrics/chat/by_hour?tenant_id=X         → distribución hora
+ * ─── CORS en producción ───────────────────────────────────────────────
+ * En dev, Vite proxea /umeia-api → umeia.space (ver vite.config.ts).
+ * En producción (client-insights.umeia.io), el backend DEBE incluir:
+ *
+ *   Access-Control-Allow-Origin: https://client-insights.umeia.io
+ *
+ * En FastAPI:
+ *   from fastapi.middleware.cors import CORSMiddleware
+ *   app.add_middleware(CORSMiddleware,
+ *     allow_origins=["https://client-insights.umeia.io"],
+ *     allow_methods=["GET"], allow_headers=["*"])
+ *
+ * En Nginx:
+ *   add_header Access-Control-Allow-Origin "https://client-insights.umeia.io";
+ * ─────────────────────────────────────────────────────────────────────
  */
 
 import { useEffect, useState } from "react";
@@ -36,15 +43,25 @@ export interface RealMetrics {
   byHour: HourPoint[];
   loading: boolean;
   error: boolean;
+  corsBlocked: boolean; // true cuando el error es específicamente CORS
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
+async function fetchJson<T>(url: string): Promise<{ data: T | null; corsBlocked: boolean }> {
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
+    if (!res.ok) return { data: null, corsBlocked: false };
+    return { data: (await res.json()) as T, corsBlocked: false };
+  } catch (err) {
+    // Los errores CORS llegan como TypeError con "Failed to fetch".
+    // No podemos distinguirlos de otros errores de red en el catch,
+    // pero si API_BASE es un dominio externo en producción asumimos CORS.
+    const isCors = !import.meta.env.DEV && API_BASE.startsWith("http");
+    if (isCors) {
+      // Log limpio en lugar del error de browser rojo
+      console.warn(`[useRealMetrics] Sin acceso a ${new URL(url).pathname} — ` +
+        `el backend necesita: Access-Control-Allow-Origin: ${window.location.origin}`);
+    }
+    return { data: null, corsBlocked: isCors };
   }
 }
 
@@ -58,7 +75,7 @@ interface ByHourResp        { by_hour: HourPoint[]; }
 const EMPTY: RealMetrics = {
   messages: null, activeConvos: null, automation: null, human: null, leads: null,
   messagesByDay: [], byIntent: [], byChannel: [], byHour: [],
-  loading: true, error: false,
+  loading: true, error: false, corsBlocked: false,
 };
 
 export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMetrics {
@@ -69,13 +86,12 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
     let cancelled = false;
 
     async function load() {
-      setMetrics(m => ({ ...m, loading: true, error: false }));
+      setMetrics(m => ({ ...m, loading: true, error: false, corsBlocked: false }));
 
-      const tid = encodeURIComponent(apiSlug);
-      const h = encodeURIComponent(hours);
+      const tid = encodeURIComponent(apiSlug!);
+      const h   = encodeURIComponent(hours);
 
-      // Todos los fetches en paralelo — sin round-trip previo de resolución
-      const [chat, webhooks, kommo, byDay, byChannel, byHour] = await Promise.all([
+      const [chatR, webhooksR, kommoR, byDayR, byChannelR, byHourR] = await Promise.all([
         fetchJson<ChatMetrics>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`),
         fetchJson<WebhookTenant>(`${API_BASE}/api/metrics/webhooks_by_tenant?tenant_id=${tid}&hours=24`),
         fetchJson<KommoResponse>(`${API_BASE}/api/metrics/kommo_leads`),
@@ -85,6 +101,17 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
       ]);
 
       if (cancelled) return;
+
+      const chat     = chatR.data;
+      const webhooks = webhooksR.data;
+      const kommo    = kommoR.data;
+      const byDay    = byDayR.data;
+      const byChannel = byChannelR.data;
+      const byHour   = byHourR.data;
+
+      // Si todos los requests fallaron por CORS, lo marcamos explícitamente
+      const corsBlocked = [chatR, webhooksR, kommoR, byDayR, byChannelR, byHourR]
+        .every(r => r.corsBlocked);
 
       const autoRate = chat?.auto_response_rate ?? null;
       const messages = chat?.total_inbound ?? webhooks?.total ?? null;
@@ -108,7 +135,8 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
         byChannel:     byChannel?.by_channel ?? [],
         byHour:        byHour?.by_hour ?? [],
         loading: false,
-        error: !chat && !webhooks,
+        error: !chat && !webhooks && !corsBlocked,
+        corsBlocked,
       });
     }
 
