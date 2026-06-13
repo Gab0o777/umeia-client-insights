@@ -5,9 +5,8 @@ import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import {
-  MessageSquare, Activity, Bot, Target,
-  Cloud, Database, Sparkles, ExternalLink, X,
-  Zap, Users, TrendingUp,
+  MessageSquare, Activity, Bot, Target, Clock,
+  Cloud, Users, Sparkles, ExternalLink, X,
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { cn } from "@/lib/utils";
@@ -125,31 +124,6 @@ function ConfigRow({
   );
 }
 
-// ─── "UMEIA trabajó por vos" stat ────────────────────────────
-
-function WorkStat({
-  icon, value, label, loading,
-}: {
-  icon: React.ReactNode;
-  value: string | null;
-  label: string;
-  loading: boolean;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2 text-center py-2">
-      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-        {icon}
-      </div>
-      {loading ? (
-        <Skeleton className="h-7 w-20" />
-      ) : (
-        <div className="text-2xl font-bold text-foreground">{value ?? "—"}</div>
-      )}
-      <div className="text-xs text-muted-foreground leading-tight">{label}</div>
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────
 
 const TOOLTIP_STYLE = {
@@ -164,10 +138,12 @@ export default function Resumen() {
   const [showKommo, setShowKommo] = useState(false);
   if (!tenant) return null;
 
-  // Mensajes respondidos automáticamente en las últimas 24h
-  const autoMessages = (real.messages != null && real.automation != null)
-    ? Math.round(real.messages * real.automation / 100)
-    : null;
+  const kpis = {
+    messages:   real.messages,
+    automation: real.automation,
+    leads:      real.leads,
+  };
+
 
   return (
     <div className="space-y-6">
@@ -261,36 +237,30 @@ export default function Resumen() {
         </div>
       </div>
 
-      {/* UMEIA trabajó por vos */}
-      <div className="premium-card p-6">
-        <div className="mb-5">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Zap className="w-4 h-4 text-accent" />
-            UMEIA trabajó por vos
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Lo que el sistema gestionó automáticamente en las últimas 24h
-          </p>
-        </div>
-        <div className="grid grid-cols-3 gap-4 divide-x divide-border">
-          <WorkStat
-            icon={<MessageSquare className="w-5 h-5 text-primary" />}
-            value={autoMessages != null ? autoMessages.toLocaleString("es-AR") : null}
-            label="Mensajes respondidos automáticamente"
-            loading={real.messagesLoading || real.automationLoading}
-          />
-          <WorkStat
-            icon={<Users className="w-5 h-5 text-info" />}
-            value={real.activeConvos != null ? real.activeConvos.toLocaleString("es-AR") : null}
-            label="Conversaciones gestionadas"
-            loading={real.convosLoading}
-          />
-          <WorkStat
-            icon={<TrendingUp className="w-5 h-5 text-success" />}
-            value={real.leads != null ? real.leads.toLocaleString("es-AR") : null}
-            label="Leads generados"
-            loading={real.leadsLoading}
-          />
+      {/* Qué hizo UMEIA por usted este mes */}
+      <div className="premium-card relative overflow-hidden p-6 sm:p-8">
+        <div className="absolute inset-0 bg-gradient-glow opacity-60 pointer-events-none" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-3 py-1 text-primary-foreground text-xs font-semibold">
+            <Sparkles className="h-3 w-3" /> Resumen ejecutivo
+          </div>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight">
+            Qué hizo UMEIA por <span className="gradient-text">{tenant.name}</span> este mes
+          </h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { icon: MessageSquare, label: "Mensajes procesados",    value: kpis.messages   != null ? kpis.messages.toLocaleString("es-AR")   : "—" },
+              { icon: Bot,           label: "Respuestas automáticas", value: kpis.automation != null ? `${kpis.automation}%`                    : "—" },
+              { icon: Clock,         label: "Horas ahorradas",        value: "—" },
+              { icon: Target,        label: "Leads generados",        value: kpis.leads      != null ? kpis.leads.toLocaleString("es-AR")       : "—" },
+            ].map((item, i) => (
+              <div key={i} className="rounded-xl border border-border bg-card/80 p-4 backdrop-blur">
+                <item.icon className="h-5 w-5 text-primary mb-2" />
+                <div className="text-2xl font-bold tracking-tight">{item.value}</div>
+                <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
