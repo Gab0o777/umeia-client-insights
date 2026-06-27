@@ -4,6 +4,7 @@ import {
   MessagesSquare,
   Boxes,
   Settings,
+  LifeBuoy,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/context/AuthContext";
@@ -27,6 +28,7 @@ const NAV = [
   { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
   { to: "/conversaciones", label: "Conversaciones", icon: MessagesSquare },
   { to: "/modulos", label: "Módulos", icon: Boxes },
+  { to: "/tickets", label: "Tickets", icon: LifeBuoy },
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ];
 
