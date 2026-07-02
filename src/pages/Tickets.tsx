@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { supabase } from "@/lib/supabase";
+import { notifyTicket } from "@/lib/notifyTicket";
 import {
   Plus, LifeBuoy, Clock, CheckCircle2, AlertCircle,
   Loader2, RefreshCw, X, User,
@@ -19,6 +20,7 @@ interface SupportTicket {
   assigned_to: string;
   created_by_email: string;
   created_by_name: string;
+  resolution_note: string;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +90,18 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
       {/* Message */}
       <p className="text-sm text-foreground leading-relaxed">{ticket.message}</p>
 
+      {/* Resolution note (visible once closed) */}
+      {ticket.status === "cerrado" && ticket.resolution_note && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 mb-1">
+            Resolución del equipo
+          </p>
+          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
+            {ticket.resolution_note}
+          </p>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/50">
         <div className="flex items-center gap-3">
@@ -116,11 +130,12 @@ interface CreateFormProps {
   onClose: () => void;
   onSuccess: () => void;
   tenantId: string;
+  tenantName: string;
   userEmail: string;
   userName: string;
 }
 
-function CreateTicketForm({ onClose, onSuccess, tenantId, userEmail, userName }: CreateFormProps) {
+function CreateTicketForm({ onClose, onSuccess, tenantId, tenantName, userEmail, userName }: CreateFormProps) {
   const [category, setCategory] = useState<string>(CATEGORIES[0]);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -134,16 +149,26 @@ function CreateTicketForm({ onClose, onSuccess, tenantId, userEmail, userName }:
     setSubmitting(true);
     setError(null);
     try {
-      const { error: err } = await supabase.from("support_tickets").insert({
-        tenant_id:        tenantId,
-        category,
-        message:          message.trim(),
-        status:           "abierto",
-        assigned_to:      "",
-        created_by_email: userEmail,
-        created_by_name:  userName,
-      });
+      const { data, error: err } = await supabase
+        .from("support_tickets")
+        .insert({
+          tenant_id:        tenantId,
+          category,
+          message:          message.trim(),
+          status:           "abierto",
+          assigned_to:      "",
+          created_by_email: userEmail,
+          created_by_name:  userName,
+        })
+        .select()
+        .single();
       if (err) throw err;
+
+      notifyTicket({
+        event: 'created',
+        ticket: { ...data, tenant_name: tenantName },
+      });
+
       onSuccess();
     } catch (e) {
       console.error(e);
@@ -307,6 +332,7 @@ export default function Tickets() {
             loadTickets(true);
           }}
           tenantId={user.tenantId}
+          tenantName={tenant.name}
           userEmail={user.email}
           userName={user.displayName}
         />

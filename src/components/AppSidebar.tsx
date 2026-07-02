@@ -28,9 +28,10 @@ const NAV = [
   { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
   { to: "/conversaciones", label: "Conversaciones", icon: MessagesSquare },
   { to: "/modulos", label: "Módulos", icon: Boxes },
-  { to: "/tickets", label: "Tickets", icon: LifeBuoy },
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ];
+
+const TICKETS_NAV = { to: "/tickets", label: "Tickets", icon: LifeBuoy };
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -102,6 +103,38 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3">
+        {!collapsed && (
+          <SidebarMenu className="mb-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname.startsWith(TICKETS_NAV.to)}
+              >
+                <NavLink to={TICKETS_NAV.to}>
+                  <TICKETS_NAV.icon className="h-4 w-4" />
+                  <span>{TICKETS_NAV.label}</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
+        {collapsed && (
+          <SidebarMenu className="mb-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname.startsWith(TICKETS_NAV.to)}
+              >
+                <NavLink to={TICKETS_NAV.to}>
+                  <TICKETS_NAV.icon className="h-4 w-4" />
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
+        {!collapsed && (
+          <div className="h-px bg-border mb-2" />
+        )}
         {!collapsed && user && (
           <div className="px-2 py-1">
             <div className="text-xs font-medium truncate">{user.displayName}</div>
