@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
+import { useCosts } from "@/hooks/useCosts";
 import {
   MessageSquare, Activity, Bot, Target, Clock,
-  Cloud, Users, Sparkles, ExternalLink, X,
+  Cloud, Users, Sparkles, ExternalLink, X, DollarSign,
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { cn } from "@/lib/utils";
@@ -134,6 +136,8 @@ const TOOLTIP_STYLE = {
 export default function Resumen() {
   const { tenant } = useAuth();
   const real = useRealMetrics(tenant?.apiSlug, 24);
+  const costs = useCosts(tenant?.apiSlug, 720); // costo del mes corriente
+  const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   const [showKommo, setShowKommo] = useState(false);
   if (!tenant) return null;
@@ -176,6 +180,27 @@ export default function Resumen() {
           ? <KpiSkeleton />
           : <KpiCard label="Leads"          value={real.leads}        icon={Target}        accent="success" />
         }
+        {/* Card de costos — solo con datos reales de Meta (módulo conectado y sin error) */}
+        {costs.data?.module_enabled && !costs.data.error && costs.data.total_cost_usd != null && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/costos")}
+            onKeyDown={e => e.key === "Enter" && navigate("/costos")}
+            className="cursor-pointer transition-transform hover:scale-[1.02] focus:outline-none"
+            title="Ver detalle de costos"
+          >
+            <KpiCard
+              label="Costo WhatsApp"
+              value={costs.data.total_cost_usd}
+              prefix="US$ "
+              decimals={2}
+              icon={DollarSign}
+              accent="warning"
+              subtitle="últimos 30 días · real (Meta) — click para detalle"
+            />
+          </div>
+        )}
       </div>
 
       {/* Gráfico mensajes por día */}
