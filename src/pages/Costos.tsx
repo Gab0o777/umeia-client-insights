@@ -20,8 +20,11 @@ const TIME_RANGES = [
 ];
 const CATEGORY_LABELS: Record<string, string> = {
   marketing: "Marketing",
+  marketing_lite: "Marketing - Lite",
   utility: "Utilidad",
   authentication: "Autenticación",
+  "authentication-international": "Autenticación internacional",
+  authentication_international: "Autenticación internacional",
   service: "Servicio",
   referral_conversion: "Referral",
   unknown: "Otros",
@@ -34,9 +37,13 @@ export default function Costos() {
   if (!tenant) return null;
 
   const hasData = !!data?.module_enabled && !data.error && data.total_cost_usd != null;
-  const avgPerConversation =
-    hasData && data?.total_conversations
-      ? (data.total_cost_usd as number) / data.total_conversations
+  const perMessage = data?.pricing_model === "per_message";
+  const billableUnits = perMessage
+    ? (data?.total_paid_messages ?? null)
+    : (data?.total_conversations ?? null);
+  const avgPerUnit =
+    hasData && billableUnits
+      ? (data!.total_cost_usd as number) / billableUnits
       : null;
 
   return (
@@ -131,17 +138,23 @@ export default function Costos() {
               subtitle="del período seleccionado"
             />
             <KpiCard
-              label="Conversaciones"
-              value={data.total_conversations ?? null}
+              label={perMessage ? "Mensajes pagos" : "Conversaciones"}
+              value={billableUnits}
               icon={MessagesSquare} accent="primary"
-              subtitle="facturables por Meta"
+              subtitle={
+                perMessage
+                  ? (data.total_free_messages != null
+                      ? `+ ${data.total_free_messages.toLocaleString()} gratuitos (servicio)`
+                      : "facturables por Meta")
+                  : "facturables por Meta"
+              }
             />
             <KpiCard
               label="Costo promedio"
-              value={avgPerConversation}
+              value={avgPerUnit}
               prefix="US$ " decimals={4}
               icon={Calculator} accent="info"
-              subtitle="por conversación"
+              subtitle={perMessage ? "por mensaje pago" : "por conversación"}
             />
           </div>
 
@@ -168,22 +181,28 @@ export default function Costos() {
 
           {data.by_category && data.by_category.length > 0 && (
             <div className="premium-card p-5">
-              <h3 className="text-sm font-semibold mb-4">Por tipo de conversación</h3>
+              <h3 className="text-sm font-semibold mb-4">
+                {perMessage ? "Por categoría de mensaje" : "Por tipo de conversación"}
+              </h3>
               <div className="space-y-2">
-                {data.by_category.map(c => (
-                  <div key={c.category}
-                    className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-3">
-                    <div>
-                      <span className="text-sm font-medium">
-                        {CATEGORY_LABELS[c.category] ?? c.category}
-                      </span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {c.conversations} conversaciones
-                      </span>
+                {data.by_category.map(c => {
+                  const units = c.messages ?? c.conversations ?? 0;
+                  const unitLabel = perMessage ? "mensajes" : "conversaciones";
+                  return (
+                    <div key={c.category}
+                      className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-3">
+                      <div>
+                        <span className="text-sm font-medium">
+                          {CATEGORY_LABELS[c.category] ?? c.category}
+                        </span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {units.toLocaleString()} {unitLabel}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold">US$ {c.cost_usd.toFixed(2)}</span>
                     </div>
-                    <span className="text-sm font-semibold">US$ {c.cost_usd.toFixed(2)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

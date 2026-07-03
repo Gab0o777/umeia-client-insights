@@ -11,7 +11,8 @@ export interface CostDay {
 export interface CostCategory {
   category: string;
   cost_usd: number;
-  conversations: number;
+  conversations?: number;
+  messages?: number;
 }
 export interface CostsResp {
   tenant_id: string;
@@ -22,8 +23,12 @@ export interface CostsResp {
   waba_name?: string | null;
   currency?: string | null;
   source?: "meta";
+  /** "per_message" (modelo nuevo) | "per_conversation" (modelo viejo) */
+  pricing_model?: "per_message" | "per_conversation";
   total_cost_usd?: number;
   total_conversations?: number;
+  total_paid_messages?: number;
+  total_free_messages?: number;
   by_day?: CostDay[];
   by_category?: CostCategory[];
   /** "reconnect_required" | "meta_http_*" | "meta_unreachable" */
