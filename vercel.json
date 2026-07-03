@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/umeia-api/:path*", "destination": "https://umeia.space/:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

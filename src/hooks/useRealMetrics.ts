@@ -77,6 +77,7 @@ async function get<T>(url: string): Promise<T | null> {
 
 interface ChatResp    { total_conversations: number; total_inbound: number; auto_response_rate: number | null; by_intent: Record<string, number>; }
 interface WebhookResp { total: number | null; }
+interface AutomationResp { automation_rate: number | null; source?: string; total?: number; human?: number; }
 interface KommoResp   { tenants: { tenant_id: string; leads_count: number | null }[] }
 interface DayResp     { days: DayPoint[]; }
 interface ChartsResp  { by_channel: ChannelPoint[]; by_hour: HourPoint[]; by_intent: IntentPoint[]; }
@@ -107,18 +108,33 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
       });
     };
 
-    // ── 1. Chat KPIs (mensajes + automation + convos) ─────────────────
-    // Un solo fetch cubre tres métricas — las tres se marcan done juntas
-    get<ChatResp>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`)
+    // ── 1a. Chat KPIs (mensajes + convos) ──────────────────────────────
+    const chatPromise = get<ChatResp>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`)
       .then(chat => {
-        const autoRate = chat?.auto_response_rate ?? null;
         patch({
-          messages:          chat?.total_inbound ?? null,
-          messagesLoading:   false,
-          activeConvos:      chat?.total_conversations ?? null,
-          convosLoading:     false,
-          automation:        autoRate !== null ? Math.round(autoRate * 100)        : null,
-          human:             autoRate !== null ? Math.round((1 - autoRate) * 100)  : null,
+          messages:        chat?.total_inbound ?? null,
+          messagesLoading: false,
+          activeConvos:    chat?.total_conversations ?? null,
+          convosLoading:   false,
+        });
+        return chat;
+      });
+
+    // ── 1b. Automatización — fuente de verdad: Kommo ───────────────────
+    // /api/metrics/automation calcula (1 - leads que pasaron por columnas
+    // de atención humana / total de leads), cubriendo también el tráfico
+    // que el Salesbot de Kommo atiende sin pasar por la API.
+    // Si el tenant no lo tiene configurado, cae al rate basado en chat.
+    get<AutomationResp>(`${API_BASE}/api/metrics/automation?tenant_id=${tid}&hours=${h}`)
+      .then(async auto => {
+        let rate = auto?.automation_rate ?? null;
+        if (rate === null) {
+          const chat = await chatPromise;
+          rate = chat?.auto_response_rate ?? null;
+        }
+        patch({
+          automation:        rate !== null ? Math.round(rate * 100)       : null,
+          human:             rate !== null ? Math.round((1 - rate) * 100) : null,
           automationLoading: false,
         });
       });
@@ -143,7 +159,10 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
       });
 
     // ── 4. Charts combinado (por canal + hora + intención) ────────────
-    get<ChartsResp>(`${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=720`)
+    // Respeta el rango de tiempo seleccionado y envía el offset horario
+    // del navegador para que "Por horario" se agrupe en hora local.
+    const tzOffset = -new Date().getTimezoneOffset(); // minutos al este de UTC (UY = -180)
+    get<ChartsResp>(`${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=${h}&tz_offset_minutes=${tzOffset}`)
       .then(data => {
         patch({
           byChannel:     data?.by_channel ?? [],

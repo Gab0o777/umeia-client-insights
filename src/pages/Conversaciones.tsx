@@ -33,7 +33,24 @@ export default function Conversaciones() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Conversaciones" description={`${tenant.name} — ${tenant.verticalLabel}.`} />
+      <SectionHeader
+        title="Conversaciones"
+        description={`${tenant.name} — ${tenant.verticalLabel}.`}
+        actions={
+          <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
+            {TIME_RANGES.map(r => (
+              <button key={r.label} onClick={() => setHours(r.hours)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  hours === r.hours
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* Cada KPI carga de forma independiente */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -57,18 +74,6 @@ export default function Conversaciones() {
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">Distribución de conversaciones</h3>
             {real.chartsLoading && <RefreshCw className="w-3 h-3 text-muted-foreground animate-spin" />}
-          </div>
-          <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
-            {TIME_RANGES.map(r => (
-              <button key={r.label} onClick={() => setHours(r.hours)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  hours === r.hours
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {r.label}
-              </button>
-            ))}
           </div>
         </div>
 
