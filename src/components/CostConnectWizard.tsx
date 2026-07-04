@@ -174,6 +174,10 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
                 inputMode="numeric"
                 className="mt-1.5 w-full rounded-xl border border-border bg-secondary/40 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-warning/50"
               />
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                Es el <span className="text-foreground">Identificador de la cuenta de WhatsApp Business</span>,
+                no el "Identificador del número de teléfono" (aparecen juntos y se confunden fácil).
+              </p>
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Token de acceso</label>
