@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { useCosts, costPrefix } from "@/hooks/useCosts";
+import { useSavedHours, formatSavedHours, MINUTES_PER_AUTO_ACTION } from "@/hooks/useSavedHours";
 import {
   MessageSquare, Activity, Bot, Target, Clock,
   Cloud, Users, Sparkles, ExternalLink, X, DollarSign,
@@ -137,6 +138,7 @@ export default function Resumen() {
   const { tenant } = useAuth();
   const real = useRealMetrics(tenant?.apiSlug, 24);
   const costs = useCosts(tenant?.apiSlug, 720); // costo del mes corriente
+  const saved = useSavedHours(tenant?.apiSlug, 720); // horas ahorradas del mes
   const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   const [showKommo, setShowKommo] = useState(false);
@@ -273,16 +275,24 @@ export default function Resumen() {
             Qué hizo UMEIA por <span className="gradient-text">{tenant.name}</span> este mes
           </h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
+            {([
               { icon: MessageSquare, label: "Mensajes procesados",    value: kpis.messages   != null ? kpis.messages.toLocaleString("es-AR")   : "—" },
               { icon: Bot,           label: "Respuestas automáticas", value: kpis.automation != null ? `${kpis.automation}%`                    : "—" },
-              { icon: Clock,         label: "Horas ahorradas",        value: "—" },
+              {
+                icon: Clock,
+                label: "Horas ahorradas",
+                value: saved.savedHours != null ? formatSavedHours(saved.savedHours) : "—",
+                hint: `estimado · ${MINUTES_PER_AUTO_ACTION} min por conversación automatizada`,
+              },
               { icon: Target,        label: "Leads generados",        value: kpis.leads      != null ? kpis.leads.toLocaleString("es-AR")       : "—" },
-            ].map((item, i) => (
+            ] as { icon: typeof Clock; label: string; value: string; hint?: string }[]).map((item, i) => (
               <div key={i} className="rounded-xl border border-border bg-card/80 p-4 backdrop-blur">
                 <item.icon className="h-5 w-5 text-primary mb-2" />
                 <div className="text-2xl font-bold tracking-tight">{item.value}</div>
                 <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
+                {item.hint && (
+                  <div className="text-[10px] text-muted-foreground/70 mt-0.5">{item.hint}</div>
+                )}
               </div>
             ))}
           </div>
