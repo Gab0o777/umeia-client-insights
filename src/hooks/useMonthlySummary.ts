@@ -14,6 +14,7 @@ const API_BASE = import.meta.env.DEV
 export const MINUTES_PER_AUTO_ACTION = 2;
 
 interface ChatResp {
+  total_inbound: number;
   total_conversations: number;
   auto_response_rate: number | null;
 }
@@ -21,21 +22,33 @@ interface AutomationResp {
   automation_rate: number | null;
 }
 
+export interface MonthlySummary {
+  /** Mensajes entrantes del período. */
+  messages: number | null;
+  /** % de automatización del período (0-100). */
+  automationPct: number | null;
+  /** Horas ahorradas estimadas: conversaciones automatizadas × MINUTES_PER_AUTO_ACTION. */
+  savedHours: number | null;
+  loading: boolean;
+}
+
 /**
- * Horas ahorradas estimadas en el período: conversaciones atendidas
- * automáticamente × MINUTES_PER_AUTO_ACTION. Usa el mismo % de
- * automatización que el resto del panel (Kommo, con fallback al rate de
- * chat). Devuelve null si falta alguno de los dos datos reales.
+ * Métricas del período para el resumen ejecutivo ("Qué hizo UMEIA por vos
+ * este mes"). Usa el mismo % de automatización que el resto del panel
+ * (Kommo, con fallback al rate de chat). Cada campo queda en null si falta
+ * el dato real — nunca estimaciones sin base.
  */
-export function useSavedHours(apiSlug: string | undefined, hours: number) {
-  const [savedHours, setSavedHours] = useState<number | null>(null);
+export function useMonthlySummary(apiSlug: string | undefined, hours: number): MonthlySummary {
+  const [summary, setSummary] = useState<Omit<MonthlySummary, "loading">>({
+    messages: null, automationPct: null, savedHours: null,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!apiSlug) return;
     let cancelled = false;
     setLoading(true);
-    setSavedHours(null);
+    setSummary({ messages: null, automationPct: null, savedHours: null });
 
     const tid = encodeURIComponent(apiSlug);
     const chatReq = fetch(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${hours}`)
@@ -49,16 +62,20 @@ export function useSavedHours(apiSlug: string | undefined, hours: number) {
       if (cancelled) return;
       const convos = chat?.total_conversations ?? null;
       const rate = auto?.automation_rate ?? chat?.auto_response_rate ?? null;
-      if (convos != null && rate != null) {
-        setSavedHours((convos * rate * MINUTES_PER_AUTO_ACTION) / 60);
-      }
+      setSummary({
+        messages:      chat?.total_inbound ?? null,
+        automationPct: rate != null ? Math.round(rate * 100) : null,
+        savedHours:    convos != null && rate != null
+          ? (convos * rate * MINUTES_PER_AUTO_ACTION) / 60
+          : null,
+      });
       setLoading(false);
     });
 
     return () => { cancelled = true; };
   }, [apiSlug, hours]);
 
-  return { savedHours, loading };
+  return { ...summary, loading };
 }
 
 /** "≈ 340 h" / "≈ 7,5 h" — sin decimales cuando el número ya es grande. */
