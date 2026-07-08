@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
-import { useCosts } from "@/hooks/useCosts";
+import { useCosts, costPrefix } from "@/hooks/useCosts";
 import { DollarSign, MessagesSquare, Calculator, Info, ExternalLink, AlertTriangle } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -94,7 +94,25 @@ export default function Costos() {
       {!loading && data?.module_enabled && data.error && (
         <div className="premium-card p-8 text-center space-y-3">
           <AlertTriangle size={24} className="text-warning mx-auto" />
-          {data.error === "reconnect_required" ? (
+          {data.error === "cost_unavailable" ? (
+            <>
+              <p className="text-sm font-medium">Meta no expone el costo de esta cuenta por API.</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Tu cuenta de WhatsApp Business está facturada a través de la línea de crédito de un
+                partner de Meta, y en ese caso Meta no publica los importes por API (solo los
+                volúmenes de mensajes). El costo real está disponible en la facturación de tu
+                proveedor o en WhatsApp Manager. Preferimos no mostrarte un número inventado.
+              </p>
+              {data.total_paid_messages != null && (
+                <p className="text-xs text-muted-foreground">
+                  En el período: {data.total_paid_messages.toLocaleString()} mensajes facturables
+                  {data.total_free_messages != null
+                    ? ` y ${data.total_free_messages.toLocaleString()} gratuitos`
+                    : ""}.
+                </p>
+              )}
+            </>
+          ) : data.error === "reconnect_required" ? (
             <>
               <p className="text-sm font-medium">La conexión con Meta expiró.</p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
@@ -133,7 +151,7 @@ export default function Costos() {
             <KpiCard
               label="Costo total"
               value={data.total_cost_usd ?? null}
-              prefix="US$ " decimals={2}
+              prefix={costPrefix(data.currency)} decimals={2}
               icon={DollarSign} accent="warning"
               subtitle="del período seleccionado"
             />
@@ -152,7 +170,7 @@ export default function Costos() {
             <KpiCard
               label="Costo promedio"
               value={avgPerUnit}
-              prefix="US$ " decimals={4}
+              prefix={costPrefix(data.currency)} decimals={4}
               icon={Calculator} accent="info"
               subtitle={perMessage ? "por mensaje pago" : "por conversación"}
             />
@@ -169,7 +187,7 @@ export default function Costos() {
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11}
                       tickFormatter={(v: number) => `$${v}`} />
                     <Tooltip contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: number) => [`US$ ${Number(v).toFixed(2)}`, "Costo"]} />
+                      formatter={(v: number) => [`${costPrefix(data.currency)}${Number(v).toFixed(2)}`, "Costo"]} />
                     <Bar dataKey="cost_usd" fill="hsl(var(--warning))" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -199,7 +217,7 @@ export default function Costos() {
                           {units.toLocaleString()} {unitLabel}
                         </span>
                       </div>
-                      <span className="text-sm font-semibold">US$ {c.cost_usd.toFixed(2)}</span>
+                      <span className="text-sm font-semibold">{costPrefix(data.currency)}{c.cost_usd.toFixed(2)}</span>
                     </div>
                   );
                 })}

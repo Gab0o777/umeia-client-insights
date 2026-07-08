@@ -31,8 +31,17 @@ export interface CostsResp {
   total_free_messages?: number;
   by_day?: CostDay[];
   by_category?: CostCategory[];
-  /** "reconnect_required" | "meta_http_*" | "meta_unreachable" */
+  /** "reconnect_required" | "cost_unavailable" | "meta_http_*" | "meta_unreachable" */
   error?: string;
+}
+
+/**
+ * Meta devuelve el costo en la moneda de facturación del WABA (campo
+ * `currency`), no siempre en USD. Prefijo para mostrar montos.
+ */
+export function costPrefix(currency?: string | null): string {
+  if (!currency || currency === "USD") return "US$ ";
+  return `${currency} `;
 }
 
 /**

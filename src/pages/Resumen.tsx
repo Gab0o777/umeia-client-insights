@@ -5,7 +5,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
-import { useCosts } from "@/hooks/useCosts";
+import { useCosts, costPrefix } from "@/hooks/useCosts";
 import {
   MessageSquare, Activity, Bot, Target, Clock,
   Cloud, Users, Sparkles, ExternalLink, X, DollarSign,
@@ -193,7 +193,7 @@ export default function Resumen() {
             <KpiCard
               label="Costo WhatsApp"
               value={costs.data.total_cost_usd}
-              prefix="US$ "
+              prefix={costPrefix(costs.data.currency)}
               decimals={2}
               icon={DollarSign}
               accent="warning"
