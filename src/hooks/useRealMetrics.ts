@@ -82,18 +82,19 @@ interface KommoResp   { tenants: { tenant_id: string; leads_count: number | null
 interface DayResp     { days: DayPoint[]; }
 interface ChartsResp  { by_channel: ChannelPoint[]; by_hour: HourPoint[]; by_intent: IntentPoint[]; }
 
-export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMetrics {
+export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 14): RealMetrics {
   const [m, setM] = useState<RealMetrics>(EMPTY);
 
   useEffect(() => {
     if (!apiSlug) return;
     let cancelled = false;
 
-    // Reset al cambiar tenant/hours
+    // Reset al cambiar tenant/hours/days
     setM({ ...EMPTY });
 
     const tid = encodeURIComponent(apiSlug);
     const h   = encodeURIComponent(hours);
+    const d   = encodeURIComponent(days);
 
     // Helper: patch parcial del estado sin pisar otros campos
     const patch = (update: Partial<RealMetrics>) => {
@@ -149,8 +150,8 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
         });
       });
 
-    // ── 3. Mensajes por día ────────────────────────────────────────────
-    get<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=14`)
+    // ── 3. Mensajes por día — respeta la cantidad de días del filtro ───
+    get<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=${d}`)
       .then(data => {
         patch({
           messagesByDay:        data?.days ?? [],
@@ -173,7 +174,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720): RealMe
       });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, hours, days]);
 
   return m;
 }

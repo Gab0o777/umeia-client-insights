@@ -127,6 +127,30 @@ function ConfigRow({
   );
 }
 
+// ─── Filtro de tiempo ───────────────────────────────────────────
+
+interface TimeRange {
+  key: string;
+  label: string;
+  /** Ventana horaria consultada a la API para todos los widgets. */
+  hours: number;
+  /** Cantidad de días a graficar en el chart de actividad (no aplica a 24hs, que usa byHour). */
+  days: number;
+  /** Texto corto para subtítulos de KPIs, ej. "últimas 24h". */
+  periodShort: string;
+  /** Frase para el título del resumen ejecutivo, ej. "este mes". */
+  heroPhrase: string;
+  /** Título del gráfico de actividad. */
+  chartTitle: string;
+}
+
+const TIME_RANGES: TimeRange[] = [
+  { key: "24h",     label: "24hs",     hours: 24,   days: 1,  periodShort: "últimas 24h",       heroPhrase: "hoy",             chartTitle: "Actividad por hora — hoy" },
+  { key: "week",    label: "Semana",   hours: 168,  days: 7,  periodShort: "última semana",      heroPhrase: "esta semana",     chartTitle: "Actividad — últimos 7 días" },
+  { key: "month",   label: "Mes",      hours: 720,  days: 30, periodShort: "último mes",         heroPhrase: "este mes",        chartTitle: "Actividad — últimos 30 días" },
+  { key: "quarter", label: "3 meses",  hours: 2160, days: 90, periodShort: "últimos 3 meses",    heroPhrase: "este trimestre",  chartTitle: "Actividad — últimos 90 días" },
+];
+
 // ─── Main page ────────────────────────────────────────────────
 
 const TOOLTIP_STYLE = {
@@ -136,23 +160,38 @@ const TOOLTIP_STYLE = {
 
 export default function Resumen() {
   const { tenant } = useAuth();
-  const real = useRealMetrics(tenant?.apiSlug, 24);
-  const costs = useCosts(tenant?.apiSlug, 720); // costo del mes corriente
-  const monthly = useMonthlySummary(tenant?.apiSlug, 720); // resumen ejecutivo del mes
+  const [range, setRange] = useState<TimeRange>(TIME_RANGES[2]); // default: Mes
+  const real = useRealMetrics(tenant?.apiSlug, range.hours, range.days);
+  const costs = useCosts(tenant?.apiSlug, range.hours);
+  const monthly = useMonthlySummary(tenant?.apiSlug, range.hours); // resumen ejecutivo del período
   const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   const [showKommo, setShowKommo] = useState(false);
   if (!tenant) return null;
 
+  const isToday = range.key === "24h";
+
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Resumen general"
-        description={`${tenant.name} — visualización en vivo de la operación UMEIA.`}
+        description={`${tenant.name} — visualización de la operación UMEIA.`}
         actions={
-          <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5">
-            <span className="pulse-dot bg-success" />
-            <span className="text-xs font-medium">En vivo · sync {syncLabel}</span>
+          <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
+            {TIME_RANGES.map(r => (
+              <button
+                key={r.key}
+                onClick={() => setRange(r)}
+                className={cn(
+                  "px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                  range.key === r.key
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
           </div>
         }
       />
@@ -161,11 +200,11 @@ export default function Resumen() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {real.messagesLoading
           ? <KpiSkeleton />
-          : <KpiCard label="Mensajes"       value={messages}          icon={MessageSquare} accent="primary" subtitle={`últimas 24h · sync ${syncLabel}`} />
+          : <KpiCard label="Mensajes"       value={messages}          icon={MessageSquare} accent="primary" subtitle={`${range.periodShort} · sync ${syncLabel}`} />
         }
         {real.convosLoading
           ? <KpiSkeleton />
-          : <KpiCard label="Conversaciones" value={real.activeConvos} icon={Activity}      accent="info" />
+          : <KpiCard label="Conversaciones" value={real.activeConvos} icon={Activity}      accent="info" subtitle={range.periodShort} />
         }
         {real.automationLoading
           ? <KpiSkeleton />
@@ -173,7 +212,7 @@ export default function Resumen() {
         }
         {real.leadsLoading
           ? <KpiSkeleton />
-          : <KpiCard label="Leads"          value={real.leads}        icon={Target}        accent="success" />
+          : <KpiCard label="Leads"          value={real.leads}        icon={Target}        accent="success" subtitle={range.periodShort} />
         }
         {/* Card de costos — solo con datos reales de Meta (módulo conectado y sin error) */}
         {costs.data?.module_enabled && !costs.data.error && costs.data.total_cost_usd != null && (
@@ -192,19 +231,41 @@ export default function Resumen() {
               decimals={2}
               icon={DollarSign}
               accent="warning"
-              subtitle="últimos 30 días · real (Meta) — click para detalle"
+              subtitle={`${range.periodShort} · real (Meta) — click para detalle`}
             />
           </div>
         )}
       </div>
 
-      {/* Gráfico mensajes por día */}
+      {/* Gráfico de actividad — respeta el filtro de tiempo elegido */}
       <div className="premium-card p-5">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold">Actividad — últimos 14 días</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Mensajes automáticos vs. humanos por día</p>
+          <h3 className="text-sm font-semibold">{range.chartTitle}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {isToday ? "Mensajes por hora" : "Mensajes automáticos vs. humanos por día"}
+          </p>
         </div>
-        {real.messagesByDayLoading ? (
+        {isToday ? (
+          real.chartsLoading ? (
+            <ChartSkeleton height={260} />
+          ) : real.byHour.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={real.byHour} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <YAxis            stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="value" name="Mensajes" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center">
+              <p className="text-xs text-muted-foreground">Sin datos en el período</p>
+            </div>
+          )
+        ) : real.messagesByDayLoading ? (
           <ChartSkeleton height={260} />
         ) : real.messagesByDay.length > 0 ? (
           <div className="h-[260px]">
@@ -265,7 +326,7 @@ export default function Resumen() {
             <Sparkles className="h-3 w-3" /> Resumen ejecutivo
           </div>
           <h2 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight">
-            Qué hizo UMEIA por <span className="gradient-text">{tenant.name}</span> este mes
+            Qué hizo UMEIA por <span className="gradient-text">{tenant.name}</span> {range.heroPhrase}
           </h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {([
