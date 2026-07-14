@@ -27,13 +27,27 @@ function AnimatedValue({ value, prefix, suffix, decimals = 0 }: {
   value: number; prefix?: string; suffix?: string; decimals?: number;
 }) {
   const v = useCountUp(value, { decimals, duration: 1400 });
+
+  // El tamaño se calcula sobre el valor FINAL (no el que está animando) para
+  // que la tipografía no salte de tamaño mientras el contador sube.
+  const finalFormatted = value.toLocaleString("es-AR", {
+    minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+  });
+  const totalLength = (prefix?.length ?? 0) + finalFormatted.length + (suffix?.length ?? 0);
+  const valueSize =
+    totalLength > 17 ? "text-lg"
+    : totalLength > 13 ? "text-xl"
+    : totalLength > 9  ? "text-2xl"
+    : "text-3xl";
+  const prefixSize = totalLength > 9 ? "text-sm" : "text-lg";
+
   return (
     <>
-      {prefix && <span className="text-lg font-semibold text-muted-foreground">{prefix}</span>}
-      <span className="text-3xl font-bold tracking-tight animate-counter">
+      {prefix && <span className={cn("font-semibold text-muted-foreground shrink-0", prefixSize)}>{prefix}</span>}
+      <span className={cn(valueSize, "font-bold tracking-tight animate-counter break-all")}>
         {v.toLocaleString("es-AR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
       </span>
-      {suffix && <span className="text-base font-semibold text-muted-foreground">{suffix}</span>}
+      {suffix && <span className="text-base font-semibold text-muted-foreground shrink-0">{suffix}</span>}
     </>
   );
 }
@@ -49,7 +63,7 @@ export function KpiCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">{label}</div>
-          <div className="mt-2 flex items-baseline gap-1">
+          <div className="mt-2 flex flex-wrap items-baseline gap-1">
             {isReal ? (
               <AnimatedValue value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
             ) : (

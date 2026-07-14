@@ -7,6 +7,7 @@ import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { useCosts, costPrefix } from "@/hooks/useCosts";
 import { useAdsCosts } from "@/hooks/useAdsCosts";
+import { getBrandName } from "@/lib/whitelabel";
 import { useMonthlySummary, formatSavedHours, MINUTES_PER_AUTO_ACTION } from "@/hooks/useMonthlySummary";
 import {
   MessageSquare, Activity, Bot, Target, Clock,
@@ -169,6 +170,7 @@ export default function Resumen() {
   const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   const [showKommo, setShowKommo] = useState(false);
+  const brandName = getBrandName();
   if (!tenant) return null;
 
   const isToday = range.key === "24h";
@@ -332,7 +334,7 @@ export default function Resumen() {
         </div>
       </div>
 
-      {/* Qué hizo UMEIA por usted este mes */}
+      {/* Qué hizo {marca} por usted este mes — la marca depende del dominio */}
       <div className="premium-card relative overflow-hidden p-6 sm:p-8">
         <div className="absolute inset-0 bg-gradient-glow opacity-60 pointer-events-none" />
         <div className="relative">
@@ -340,7 +342,7 @@ export default function Resumen() {
             <Sparkles className="h-3 w-3" /> Resumen ejecutivo
           </div>
           <h2 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight">
-            Qué hizo UMEIA por <span className="gradient-text">{tenant.name}</span> {range.heroPhrase}
+            Qué hizo {brandName} por <span className="gradient-text">{tenant.name}</span> {range.heroPhrase}
           </h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {([
