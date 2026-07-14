@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
+  Activity,
   MessagesSquare,
   Boxes,
   Settings,
@@ -26,6 +27,7 @@ import {
 
 const NAV = [
   { to: "/", label: "Resumen", icon: LayoutDashboard, end: true },
+  { to: "/actividad", label: "Actividad", icon: Activity },
   { to: "/conversaciones", label: "Conversaciones", icon: MessagesSquare },
   { to: "/modulos", label: "Módulos", icon: Boxes },
   { to: "/configuracion", label: "Configuración", icon: Settings },

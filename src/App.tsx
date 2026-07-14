@@ -11,6 +11,7 @@ import { AppLayout } from "@/components/AppLayout";
 
 import Login from "./pages/Login";
 import Resumen from "./pages/Resumen";
+import Actividad from "./pages/Actividad";
 import Conversaciones from "./pages/Conversaciones";
 import Campanas from "./pages/Campanas";
 import Automatizacion from "./pages/Automatizacion";
@@ -43,6 +44,7 @@ const App = () => (
                 }
               >
                 <Route path="/" element={<Resumen />} />
+                <Route path="/actividad" element={<Actividad />} />
                 <Route path="/conversaciones" element={<Conversaciones />} />
                 <Route path="/campanas" element={<Campanas />} />
                 <Route path="/automatizacion" element={<Automatizacion />} />
