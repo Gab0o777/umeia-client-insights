@@ -6,10 +6,11 @@ import { KpiCard } from "@/components/KpiCard";
 import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { useCosts, costPrefix } from "@/hooks/useCosts";
+import { useAdsCosts } from "@/hooks/useAdsCosts";
 import { useMonthlySummary, formatSavedHours, MINUTES_PER_AUTO_ACTION } from "@/hooks/useMonthlySummary";
 import {
   MessageSquare, Activity, Bot, Target, Clock,
-  Cloud, Users, Sparkles, ExternalLink, X, DollarSign,
+  Cloud, Users, Sparkles, ExternalLink, X, DollarSign, Megaphone,
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { cn } from "@/lib/utils";
@@ -163,6 +164,7 @@ export default function Resumen() {
   const [range, setRange] = useState<TimeRange>(TIME_RANGES[2]); // default: Mes
   const real = useRealMetrics(tenant?.apiSlug, range.hours, range.days);
   const costs = useCosts(tenant?.apiSlug, range.hours);
+  const adsCosts = useAdsCosts(tenant?.apiSlug, range.hours);
   const monthly = useMonthlySummary(tenant?.apiSlug, range.hours); // resumen ejecutivo del período
   const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
@@ -234,6 +236,18 @@ export default function Resumen() {
               subtitle={`${range.periodShort} · real (Meta) — click para detalle`}
             />
           </div>
+        )}
+        {/* Card de costos de ads — solo si el módulo "costos_ads" está activo */}
+        {adsCosts.data?.module_enabled && adsCosts.data.total_spend_usd != null && (
+          <KpiCard
+            label="Costos de Ads"
+            value={adsCosts.data.total_spend_usd}
+            prefix="US$ "
+            decimals={2}
+            icon={Megaphone}
+            accent="accent"
+            subtitle={`${range.periodShort} · inversión publicitaria`}
+          />
         )}
       </div>
 
