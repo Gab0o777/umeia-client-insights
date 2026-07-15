@@ -66,8 +66,8 @@ function ToggleSwitch({ on, busy, onToggle }: { on: boolean; busy: boolean; onTo
 }
 
 function ModuleCard({
-  mod, busy, onToggle,
-}: { mod: ModuleInfo; busy: boolean; onToggle: (m: ModuleInfo) => void }) {
+  mod, busy, onToggle, onReconnect,
+}: { mod: ModuleInfo; busy: boolean; onToggle: (m: ModuleInfo) => void; onReconnect?: (m: ModuleInfo) => void }) {
   const Icon = MODULE_ICONS[mod.id] ?? Cpu;
   return (
     <div className={cn("premium-card p-5", mod.active ? "border-success/30" : "opacity-70")}>
@@ -91,6 +91,14 @@ function ModuleCard({
       </div>
       <h3 className={cn("text-sm font-semibold", !mod.active && "text-muted-foreground")}>{mod.name}</h3>
       <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{mod.description}</p>
+      {mod.requires_connection && mod.connected && onReconnect && (
+        <button
+          onClick={() => onReconnect(mod)}
+          className="mt-3 text-xs text-accent hover:underline"
+        >
+          Actualizar credenciales de Meta
+        </button>
+      )}
     </div>
   );
 }
@@ -187,7 +195,7 @@ export default function Modulos() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activos.map(m => (
-              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} />
+              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} />
             ))}
           </div>
 
@@ -196,7 +204,7 @@ export default function Modulos() {
               <p className="text-xs text-muted-foreground font-medium mb-3">Disponibles (no contratados)</p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {inactivos.map(m => (
-                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} />
+                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} />
                 ))}
               </div>
             </div>
