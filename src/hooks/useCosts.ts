@@ -33,6 +33,9 @@ export interface CostsResp {
   by_category?: CostCategory[];
   /** "reconnect_required" | "cost_unavailable" | "meta_http_*" | "meta_unreachable" */
   error?: string;
+  /** true si el WABA está gestionado on-behalf-of por otro negocio (Tech Provider/BSP) — Meta oculta el costo por API en ese caso, sin importar quién paga la tarjeta. */
+  managed_on_behalf_of?: boolean;
+  partner_business_name?: string | null;
 }
 
 /**

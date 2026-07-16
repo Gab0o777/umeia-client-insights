@@ -98,13 +98,29 @@ export default function Costos() {
             <>
               <p className="text-sm font-medium">Meta no expone el costo de esta cuenta por API.</p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Meta devuelve el volumen de mensajes pero no el importe en dólares. Las causas más
-                comunes: la cuenta está facturada a través de la línea de crédito de un partner de
-                Meta (en ese caso el costo real está en la facturación del proveedor), o el usuario
-                del sistema conectado no tiene el rol de <span className="text-foreground">Finance
-                Editor / Finance Analyst</span> asignado sobre esta cuenta de WhatsApp en Business
-                Settings — ese permiso es aparte de "whatsapp_business_management" y es requisito de
-                Meta para exponer costos por API. Preferimos no mostrarte un número inventado.
+                {data.managed_on_behalf_of ? (
+                  <>
+                    Meta devuelve el volumen de mensajes pero no el importe en dólares porque esta
+                    cuenta de WhatsApp está gestionada on-behalf-of por{" "}
+                    {data.partner_business_name ? <span className="text-foreground">{data.partner_business_name}</span> : "otro negocio"}
+                    {" "}(estructura de Tech Provider / Partner). Meta restringe el costo a los
+                    usuarios del negocio dueño de la cuenta, sin importar los permisos del usuario
+                    del sistema del partner — el costo real hay que verlo directo en WhatsApp Manager
+                    con un usuario del negocio dueño de la cuenta. Preferimos no mostrarte un número
+                    inventado.
+                  </>
+                ) : (
+                  <>
+                    Meta devuelve el volumen de mensajes pero no el importe en dólares. Las causas
+                    más comunes: la cuenta está facturada a través de la línea de crédito de un
+                    partner de Meta (en ese caso el costo real está en la facturación del
+                    proveedor), o el usuario del sistema conectado no tiene el rol de{" "}
+                    <span className="text-foreground">Finance Editor / Finance Analyst</span>{" "}
+                    asignado sobre esta cuenta de WhatsApp en Business Settings — ese permiso es
+                    aparte de "whatsapp_business_management" y es requisito de Meta para exponer
+                    costos por API. Preferimos no mostrarte un número inventado.
+                  </>
+                )}
               </p>
               {data.total_paid_messages != null && (
                 <p className="text-xs text-muted-foreground">
