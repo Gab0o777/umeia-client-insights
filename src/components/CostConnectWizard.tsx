@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, DollarSign, ExternalLink, ArrowRight, ArrowLeft,
-  CheckCircle2, Loader2, KeyRound, Hash, ShieldCheck,
+  CheckCircle2, Loader2, KeyRound, Hash, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,7 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wabaName, setWabaName] = useState<string | null>(null);
+  const [onBehalfOf, setOnBehalfOf] = useState<string | null>(null);
 
   const connect = async () => {
     setBusy(true);
@@ -44,6 +45,7 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
         return;
       }
       setWabaName(json?.waba_name ?? null);
+      setOnBehalfOf(json?.managed_on_behalf_of ? (json?.partner_business_name ?? "otro negocio") : null);
       setStep(3); // éxito
     } catch {
       setError("No se pudo contactar al servidor. Verificá tu conexión e intentá de nuevo.");
@@ -127,6 +129,14 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
         {/* PASO 1 — instrucciones */}
         {step === 1 && (
           <div className="space-y-4">
+            <div className="rounded-xl bg-warning/10 border border-warning/40 p-4 space-y-1.5">
+              <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                <AlertTriangle size={13} className="text-warning shrink-0" /> Importante: tiene que ser TU propia Business Manager
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Todos los pasos de abajo hay que hacerlos logueado en la Business Manager <span className="text-foreground">de tu propio negocio</span> (la que ustedes administran) — no la de UMEIA ni la de ninguna agencia. Si tu cuenta de WhatsApp está gestionada por un tercero "en tu nombre" (on-behalf-of), Meta oculta el costo en dólares aunque el token tenga todos los permisos. Si no estás seguro de en qué Business Manager estás parado, mirá arriba a la izquierda de business.facebook.com/settings — debe decir el nombre de tu propio negocio.
+              </p>
+            </div>
             <div className="rounded-xl bg-secondary/40 border border-border p-4 space-y-2">
               <p className="text-xs font-semibold flex items-center gap-1.5">
                 <Hash size={13} className="text-info" /> 1 · Copiá tu WABA ID
@@ -142,7 +152,7 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
                 <KeyRound size={13} className="text-info" /> 2 · Generá el token
               </p>
               <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
-                <li>Entrá a <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">Usuarios del sistema <ExternalLink size={10} /></a> en la configuración del negocio.</li>
+                <li>Entrá a <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">Usuarios del sistema <ExternalLink size={10} /></a> en la configuración de TU negocio.</li>
                 <li>Creá un usuario del sistema (o usá uno existente) con rol <span className="text-foreground">Administrador</span>.</li>
                 <li>En <span className="text-foreground">Agregar activos</span>, asignale tu cuenta de WhatsApp con control total, y además el rol <span className="text-foreground">Finance Editor</span> (o Finance Analyst) sobre esa misma cuenta — sin ese rol Meta expone el volumen de mensajes pero no el costo en dólares.</li>
                 <li>Tocá <span className="text-foreground">Generar token</span>, elegí la app, marcá el permiso <span className="text-foreground font-mono text-[11px]">whatsapp_business_management</span> y elegí que no expire.</li>
@@ -216,19 +226,49 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
         {/* PASO 3 — éxito */}
         {step === 3 && (
           <div className="space-y-4 text-center py-4">
-            <div className="w-14 h-14 rounded-full bg-success/15 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-7 h-7 text-success" />
+            <div className={cn(
+              "w-14 h-14 rounded-full flex items-center justify-center mx-auto",
+              onBehalfOf ? "bg-warning/15" : "bg-success/15",
+            )}>
+              {onBehalfOf
+                ? <AlertTriangle className="w-7 h-7 text-warning" />
+                : <CheckCircle2 className="w-7 h-7 text-success" />}
             </div>
             <div>
-              <h4 className="text-sm font-bold">¡Cuenta conectada!</h4>
+              <h4 className="text-sm font-bold">
+                {onBehalfOf ? "Cuenta conectada, pero el costo no va a mostrarse" : "¡Cuenta conectada!"}
+              </h4>
               <p className="mt-1 text-xs text-muted-foreground">
-                {wabaName ? <>Conectamos <span className="text-foreground font-medium">{wabaName}</span>.</> : "Conexión validada con Meta."}{" "}
-                El módulo de costos quedó activo — ya vas a ver la card en tu Resumen.
+                {wabaName ? <>Conectamos <span className="text-foreground font-medium">{wabaName}</span>.</> : "Conexión validada con Meta."}
               </p>
+              {onBehalfOf ? (
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed text-left bg-warning/10 border border-warning/30 rounded-xl p-3">
+                  Meta indica que esta cuenta está gestionada on-behalf-of por{" "}
+                  <span className="text-foreground">{onBehalfOf}</span> — eso significa que el token
+                  se generó en una Business Manager que no es la tuya propia (una agencia o partner).
+                  En esta configuración Meta nunca expone el costo en dólares por API, sin importar
+                  los permisos del token. Para ver el costo real hay que repetir el paso 2 generando
+                  el token desde <span className="text-foreground">tu propia</span> Business Manager
+                  (no la del partner).
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  El módulo de costos quedó activo — ya vas a ver la card en tu Resumen.
+                </p>
+              )}
             </div>
+            {onBehalfOf && (
+              <button onClick={() => { setStep(1); setOnBehalfOf(null); setWabaId(""); setToken(""); }}
+                className="w-full rounded-xl border border-warning/40 text-warning text-sm font-semibold py-2.5 hover:bg-warning/10 transition-colors">
+                Volver a intentar con mi propia cuenta
+              </button>
+            )}
             <button onClick={() => { onConnected(); onClose(); }}
-              className="w-full rounded-xl bg-success text-success-foreground text-sm font-semibold py-2.5 hover:opacity-90 transition-opacity">
-              Listo
+              className={cn(
+                "w-full rounded-xl text-sm font-semibold py-2.5 transition-opacity hover:opacity-90",
+                onBehalfOf ? "border border-border" : "bg-success text-success-foreground",
+              )}>
+              {onBehalfOf ? "Cerrar de todos modos" : "Listo"}
             </button>
           </div>
         )}

@@ -22,6 +22,7 @@ import Infraestructura from "./pages/Infraestructura";
 import Insights from "./pages/Insights";
 import Tickets from "./pages/Tickets";
 import Configuracion from "./pages/Configuracion";
+import ConectarCostos from "./pages/ConectarCostos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/conectar-costos/:tenantSlug" element={<ConectarCostos />} />
               <Route
                 element={
                   <ProtectedRoute>
