@@ -144,7 +144,7 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
               <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
                 <li>Entrá a <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">Usuarios del sistema <ExternalLink size={10} /></a> en la configuración del negocio.</li>
                 <li>Creá un usuario del sistema (o usá uno existente) con rol <span className="text-foreground">Administrador</span>.</li>
-                <li>En <span className="text-foreground">Agregar activos</span>, asignale tu cuenta de WhatsApp con control total.</li>
+                <li>En <span className="text-foreground">Agregar activos</span>, asignale tu cuenta de WhatsApp con control total, y además el rol <span className="text-foreground">Finance Editor</span> (o Finance Analyst) sobre esa misma cuenta — sin ese rol Meta expone el volumen de mensajes pero no el costo en dólares.</li>
                 <li>Tocá <span className="text-foreground">Generar token</span>, elegí la app, marcá el permiso <span className="text-foreground font-mono text-[11px]">whatsapp_business_management</span> y elegí que no expire.</li>
                 <li>Copiá el token (empieza con <span className="font-mono text-[11px]">EAA…</span>). Se muestra una sola vez.</li>
               </ol>

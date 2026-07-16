@@ -98,10 +98,13 @@ export default function Costos() {
             <>
               <p className="text-sm font-medium">Meta no expone el costo de esta cuenta por API.</p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Tu cuenta de WhatsApp Business está facturada a través de la línea de crédito de un
-                partner de Meta, y en ese caso Meta no publica los importes por API (solo los
-                volúmenes de mensajes). El costo real está disponible en la facturación de tu
-                proveedor o en WhatsApp Manager. Preferimos no mostrarte un número inventado.
+                Meta devuelve el volumen de mensajes pero no el importe en dólares. Las causas más
+                comunes: la cuenta está facturada a través de la línea de crédito de un partner de
+                Meta (en ese caso el costo real está en la facturación del proveedor), o el usuario
+                del sistema conectado no tiene el rol de <span className="text-foreground">Finance
+                Editor / Finance Analyst</span> asignado sobre esta cuenta de WhatsApp en Business
+                Settings — ese permiso es aparte de "whatsapp_business_management" y es requisito de
+                Meta para exponer costos por API. Preferimos no mostrarte un número inventado.
               </p>
               {data.total_paid_messages != null && (
                 <p className="text-xs text-muted-foreground">
@@ -111,6 +114,9 @@ export default function Costos() {
                     : ""}.
                 </p>
               )}
+              <Link to="/modulos" className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline">
+                Actualizar credenciales en Módulos <ExternalLink size={12} />
+              </Link>
             </>
           ) : data.error === "reconnect_required" ? (
             <>
