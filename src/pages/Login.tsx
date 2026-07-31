@@ -8,12 +8,14 @@ import { useAuth } from "@/context/AuthContext";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
+import { getBrandName } from "@/lib/whitelabel";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
   const from      = (location.state as { from?: Location })?.from?.pathname ?? "/";
+  const brandName = getBrandName();
 
   const [email,   setEmail]   = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +28,7 @@ export default function Login() {
     const result = await login(email, password);
     setLoading(false);
     if (result.ok) {
-      toast.success("Bienvenido al Portal UMEIA");
+      toast.success(`Bienvenido al Portal ${brandName}`);
       navigate(from, { replace: true });   // vuelve a la ruta donde estaba
     } else {
       toast.error(result.error);
@@ -53,7 +55,7 @@ export default function Login() {
           </div>
           <h1 className="mt-6 text-5xl font-bold leading-[1.05] tracking-tight">
             Visualizá toda tu operación con{" "}
-            <span className="gradient-text">UMEIA</span>.
+            <span className="gradient-text">{brandName}</span>.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted-foreground">
             Mensajes, automatización, costos, módulos e infraestructura — en un panel
@@ -146,7 +148,7 @@ export default function Login() {
                 href="mailto:soporte@umeia.io"
                 className="text-primary hover:underline font-medium"
               >
-                Contactá a tu referente UMEIA
+                Contactá a tu referente {brandName}
               </a>
             </p>
           </div>
