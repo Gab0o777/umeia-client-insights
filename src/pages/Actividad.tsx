@@ -4,7 +4,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
 import { ArrowRightLeft, Bot, Headset, ListTree } from "lucide-react";
 import { useActivitySummary } from "@/hooks/useActivitySummary";
-import { ActivityExplorer } from "@/components/ActivityExplorer";
+import { ColumnStatusCards } from "@/components/ColumnStatusCards";
 import { KpiSkeleton } from "@/components/Skeleton";
 
 const TIME_RANGES = [
@@ -60,7 +60,7 @@ export default function Actividad() {
         }
       </div>
 
-      <ActivityExplorer apiSlug={tenant.apiSlug} />
+      <ColumnStatusCards apiSlug={tenant.apiSlug} summary={summary} />
     </div>
   );
 }
