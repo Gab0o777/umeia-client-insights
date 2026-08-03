@@ -5,6 +5,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { ArrowRightLeft, Bot, Headset, ListTree } from "lucide-react";
 import { useActivitySummary } from "@/hooks/useActivitySummary";
 import { ColumnStatusCards } from "@/components/ColumnStatusCards";
+import { ActivityExplorer } from "@/components/ActivityExplorer";
 import { KpiSkeleton } from "@/components/Skeleton";
 
 const TIME_RANGES = [
@@ -40,27 +41,41 @@ export default function Actividad() {
         }
       />
 
-      {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {summary.loading
-          ? <KpiSkeleton />
-          : <KpiCard label="Total eventos" value={summary.total} icon={ListTree} accent="primary" />
-        }
-        {summary.loading
-          ? <KpiSkeleton />
-          : <KpiCard label="Leads movidos de columna" value={summary.leadMovedColumn} icon={ArrowRightLeft} accent="accent" />
-        }
-        {summary.loading
-          ? <KpiSkeleton />
-          : <KpiCard label="Respuestas del bot" value={summary.botReply} icon={Bot} accent="success" />
-        }
-        {summary.loading
-          ? <KpiSkeleton />
-          : <KpiCard label="Respuestas de agentes CRM" value={summary.humanAgentReply} icon={Headset} accent="warning" />
-        }
+      {/* ── Actividad general ── */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actividad general</h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {summary.loading
+            ? <KpiSkeleton />
+            : <KpiCard label="Total eventos" value={summary.total} icon={ListTree} accent="primary" />
+          }
+          {summary.loading
+            ? <KpiSkeleton />
+            : <KpiCard label="Leads movidos de columna" value={summary.leadMovedColumn} icon={ArrowRightLeft} accent="accent" />
+          }
+          {summary.loading
+            ? <KpiSkeleton />
+            : <KpiCard label="Respuestas del bot" value={summary.botReply} icon={Bot} accent="success" />
+          }
+          {summary.loading
+            ? <KpiSkeleton />
+            : <KpiCard label="Respuestas de agentes CRM" value={summary.humanAgentReply} icon={Headset} accent="warning" />
+          }
+        </div>
       </div>
 
-      <ColumnStatusCards apiSlug={tenant.apiSlug} summary={summary} />
+      {/* ── Actividad del CRM ── */}
+      <ColumnStatusCards apiSlug={tenant.apiSlug} />
+
+      {/* ── Actividad respuesta humana ── */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actividad respuesta humana</h3>
+        <ActivityExplorer
+          apiSlug={tenant.apiSlug}
+          title="Respuestas de agentes"
+          fixedType="human_agent_reply"
+        />
+      </div>
     </div>
   );
 }

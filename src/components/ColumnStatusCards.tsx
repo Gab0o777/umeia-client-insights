@@ -1,57 +1,58 @@
 /**
- * ColumnStatusCards — grilla de status cards que reemplaza al viejo listado
- * de "Actividad reciente": una card por columna del pipeline del CRM (leads
- * abiertos parados ahí) más una card con los mensajes respondidos
- * manualmente por un agente.
+ * ColumnStatusCards — sección "Actividad del CRM": una status card por
+ * columna del pipeline (leads abiertos parados ahí) más, si el tenant tiene
+ * configurado el hand-off a un humano, una card con los mensajes que
+ * todavía no fueron respondidos en esa columna.
  */
-import { Layers, Headset } from "lucide-react";
+import { Layers, UserCheck } from "lucide-react";
 import { KpiCard } from "@/components/KpiCard";
 import { KpiSkeleton } from "@/components/Skeleton";
 import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
-import type { ActivitySummary } from "@/hooks/useActivitySummary";
 
 const ACCENTS = ["primary", "info", "accent", "success", "warning"] as const;
 
-export function ColumnStatusCards({ apiSlug, summary }: {
-  apiSlug: string | undefined;
-  summary: ActivitySummary;
-}) {
+export function ColumnStatusCards({ apiSlug }: { apiSlug: string | undefined }) {
   const report = useLeadStatusReport(apiSlug);
 
+  const title = report.crm
+    ? `Actividad del CRM — ${report.crm.name} (${report.crm.subdomain})`
+    : "Actividad del CRM";
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {summary.loading
-        ? <KpiSkeleton />
-        : (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</h3>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {report.loading
+          ? Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />)
+          : report.columns.map((col, i) => (
+              <KpiCard
+                key={col.status_id}
+                label={col.status_name ?? `Columna ${col.status_id}`}
+                value={col.total}
+                icon={Layers}
+                accent={ACCENTS[i % ACCENTS.length]}
+                subtitle="Leads en esta columna"
+              />
+            ))
+        }
+
+        {!report.loading && report.hasHandoff && (
           <KpiCard
-            label="Respondidos manualmente"
-            value={summary.humanAgentReply}
-            icon={Headset}
+            label="Sin responder (respuesta humana)"
+            value={report.pendingReply}
+            icon={UserCheck}
             accent="warning"
-            subtitle="Mensajes contestados por un agente del CRM"
+            subtitle="Leads en la columna de handoff cuyo último mensaje quedó sin contestar"
           />
-        )
-      }
+        )}
 
-      {report.loading
-        ? Array.from({ length: 3 }).map((_, i) => <KpiSkeleton key={i} />)
-        : report.columns.map((col, i) => (
-            <KpiCard
-              key={col.status_id}
-              label={col.status_name ?? `Columna ${col.status_id}`}
-              value={col.total}
-              icon={Layers}
-              accent={ACCENTS[i % ACCENTS.length]}
-              subtitle="Leads en esta columna"
-            />
-          ))
-      }
-
-      {!report.loading && report.columns.length === 0 && (
-        <div className="premium-card p-5 text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
-          Sin columnas con leads abiertos en este momento.
-        </div>
-      )}
+        {!report.loading && report.columns.length === 0 && (
+          <div className="premium-card p-5 text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
+            Sin columnas con leads abiertos en este momento.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
