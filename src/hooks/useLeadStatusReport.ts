@@ -16,18 +16,30 @@ export interface LeadStatusColumn {
   oldest_days: number | null;
 }
 
+export interface CrmInfo {
+  name: string;
+  subdomain: string;
+}
+
 interface LeadStatusReportResp {
   total_open: number;
   statuses: LeadStatusColumn[];
+  crm: CrmInfo | null;
+  human_handoff: { status_ids: number[]; pending_reply: number };
 }
 
 export interface LeadStatusReport {
-  totalOpen: number | null;
-  columns:   LeadStatusColumn[];
-  loading:   boolean;
+  totalOpen:    number | null;
+  columns:      LeadStatusColumn[];
+  crm:          CrmInfo | null;
+  pendingReply: number | null;
+  hasHandoff:   boolean;
+  loading:      boolean;
 }
 
-const EMPTY: LeadStatusReport = { totalOpen: null, columns: [], loading: true };
+const EMPTY: LeadStatusReport = {
+  totalOpen: null, columns: [], crm: null, pendingReply: null, hasHandoff: false, loading: true,
+};
 
 export function useLeadStatusReport(apiSlug: string | undefined): LeadStatusReport {
   const [s, setS] = useState<LeadStatusReport>(EMPTY);
@@ -44,9 +56,12 @@ export function useLeadStatusReport(apiSlug: string | undefined): LeadStatusRepo
       .then(data => {
         if (cancelled || !data) return;
         setS({
-          totalOpen: data.total_open,
-          columns: data.statuses,
-          loading: false,
+          totalOpen:    data.total_open,
+          columns:      data.statuses,
+          crm:          data.crm,
+          pendingReply: data.human_handoff?.pending_reply ?? null,
+          hasHandoff:   (data.human_handoff?.status_ids?.length ?? 0) > 0,
+          loading:      false,
         });
       })
       .catch(() => {

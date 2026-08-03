@@ -203,14 +203,23 @@ function ActivityModal({ item, onClose }: { item: ActivityItem; onClose: () => v
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ActivityExplorer({ apiSlug }: { apiSlug: string }) {
+interface Props {
+  apiSlug: string;
+  title?: string;
+  /** Cuando se pasa, la vista queda fija en ese tipo de actividad y se
+   * ocultan los tabs de tipo (usado para secciones dedicadas, como
+   * "Actividad respuesta humana"). */
+  fixedType?: ActivityType;
+}
+
+export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedType }: Props) {
   const [hours,       setHours]       = useState(24);
   const [live,        setLive]        = useState(false);
   const [data,        setData]        = useState<ActivitiesResponse | null>(null);
   const [loading,     setLoading]     = useState(false);
   const [search,      setSearch]      = useState("");
   const [leadFilter,  setLeadFilter]  = useState("");
-  const [type,        setType]        = useState<"all" | ActivityType>("all");
+  const [type,        setType]        = useState<"all" | ActivityType>(fixedType ?? "all");
   const [offset,      setOffset]      = useState(0);
   const [selected,    setSelected]    = useState<ActivityItem | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -273,7 +282,7 @@ export function ActivityExplorer({ apiSlug }: { apiSlug: string }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-3 flex-wrap">
         <div className="flex items-center gap-2 shrink-0">
           <Inbox className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold">Actividad reciente</span>
+          <span className="text-sm font-semibold">{title}</span>
           {data && !loading && (
             <Badge variant="secondary" className="text-[11px]">{data.total}</Badge>
           )}
@@ -326,38 +335,40 @@ export function ActivityExplorer({ apiSlug }: { apiSlug: string }) {
       {/* ── Filters row ── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border flex-wrap">
         {/* Type filter */}
-        <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5 flex-wrap">
-          <button
-            onClick={() => setType("all")}
-            className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              type === "all"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Todas
-            {data && <span className="ml-1 text-muted-foreground/70">({ACTIVITY_TYPES.reduce((s, t) => s + (data.counts[t] ?? 0), 0)})</span>}
-          </button>
-          {ACTIVITY_TYPES.map(t => {
-            const cfg = TYPE_CONFIG[t];
-            const Icon = cfg.icon;
-            return (
-              <button
-                key={t}
-                onClick={() => setType(t)}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                  type === t
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon className="w-3 h-3" style={{ color: cfg.color }} />
-                {cfg.short}
-                {data && <span className="text-muted-foreground/70">({data.counts[t] ?? 0})</span>}
-              </button>
-            );
-          })}
-        </div>
+        {!fixedType && (
+          <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5 flex-wrap">
+            <button
+              onClick={() => setType("all")}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                type === "all"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Todas
+              {data && <span className="ml-1 text-muted-foreground/70">({ACTIVITY_TYPES.reduce((s, t) => s + (data.counts[t] ?? 0), 0)})</span>}
+            </button>
+            {ACTIVITY_TYPES.map(t => {
+              const cfg = TYPE_CONFIG[t];
+              const Icon = cfg.icon;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                    type === t
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-3 h-3" style={{ color: cfg.color }} />
+                  {cfg.short}
+                  {data && <span className="text-muted-foreground/70">({data.counts[t] ?? 0})</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Lead / conversation filter */}
         <div className="relative w-40">
