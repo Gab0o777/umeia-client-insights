@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
-import { ArrowRightLeft, Bot, Headset, ListTree } from "lucide-react";
+import { ArrowRightLeft, Bot, Headset, ListTree, MessagesSquare, UserCheck } from "lucide-react";
 import { useActivitySummary } from "@/hooks/useActivitySummary";
+import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
 import { ColumnStatusCards } from "@/components/ColumnStatusCards";
 import { ActivityExplorer } from "@/components/ActivityExplorer";
 import { KpiSkeleton } from "@/components/Skeleton";
@@ -18,6 +19,7 @@ export default function Actividad() {
   const { tenant } = useAuth();
   const [hours, setHours] = useState(24);
   const summary = useActivitySummary(tenant?.apiSlug, hours);
+  const report = useLeadStatusReport(tenant?.apiSlug);
   if (!tenant) return null;
 
   return (
@@ -70,10 +72,37 @@ export default function Actividad() {
       {/* ── Actividad respuesta humana ── */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actividad respuesta humana</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {summary.loading
+            ? <KpiSkeleton />
+            : (
+              <KpiCard
+                label="Mensajes respondidos"
+                value={summary.humanAgentReply}
+                icon={MessagesSquare}
+                accent="warning"
+                subtitle="Eventos de respuesta detectados"
+              />
+            )
+          }
+          {summary.loading
+            ? <KpiSkeleton />
+            : (
+              <KpiCard
+                label="Conversaciones respondidas"
+                value={summary.humanAgentReplyConversations}
+                icon={UserCheck}
+                accent="warning"
+                subtitle="Leads distintos con al menos una respuesta"
+              />
+            )
+          }
+        </div>
         <ActivityExplorer
           apiSlug={tenant.apiSlug}
           title="Respuestas de agentes"
           fixedType="human_agent_reply"
+          crmSubdomain={report.crm?.subdomain}
         />
       </div>
     </div>

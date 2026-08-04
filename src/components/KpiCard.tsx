@@ -62,7 +62,7 @@ export function KpiCard({
       <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-glow opacity-0 group-hover:opacity-100 transition-opacity" />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">{label}</div>
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider break-words">{label}</div>
           <div className="mt-2 flex flex-wrap items-baseline gap-1">
             {isReal ? (
               <AnimatedValue value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
