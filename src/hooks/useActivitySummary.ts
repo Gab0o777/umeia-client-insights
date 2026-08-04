@@ -10,21 +10,24 @@ const API_BASE = import.meta.env.DEV
   : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
 
 export interface ActivitySummary {
-  total:            number | null;
-  leadMovedColumn:  number | null;
-  botReply:         number | null;
-  humanAgentReply:  number | null;
-  loading:          boolean;
+  total:                       number | null;
+  leadMovedColumn:             number | null;
+  botReply:                    number | null;
+  humanAgentReply:             number | null;
+  humanAgentReplyConversations: number | null;
+  loading:                     boolean;
 }
 
 const EMPTY: ActivitySummary = {
   total: null, leadMovedColumn: null, botReply: null, humanAgentReply: null,
+  humanAgentReplyConversations: null,
   loading: true,
 };
 
 interface Resp {
   total: number;
   counts: Record<string, number>;
+  conversation_counts?: Record<string, number>;
 }
 
 export function useActivitySummary(apiSlug: string | undefined, hours = 24): ActivitySummary {
@@ -50,6 +53,7 @@ export function useActivitySummary(apiSlug: string | undefined, hours = 24): Act
           leadMovedColumn: data.counts?.lead_moved_column ?? 0,
           botReply: data.counts?.bot_reply ?? 0,
           humanAgentReply: data.counts?.human_agent_reply ?? 0,
+          humanAgentReplyConversations: data.conversation_counts?.human_agent_reply ?? 0,
           loading: false,
         });
       })

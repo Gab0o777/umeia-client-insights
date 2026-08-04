@@ -6,6 +6,7 @@ import {
   Boxes,
   Settings,
   LifeBuoy,
+  LogOut,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/context/AuthContext";
@@ -38,7 +39,7 @@ const TICKETS_NAV = { to: "/tickets", label: "Tickets", icon: LifeBuoy };
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { tenant, user } = useAuth();
+  const { tenant, user, logout } = useAuth();
   const location = useLocation();
 
   return (
@@ -138,9 +139,29 @@ export function AppSidebar() {
           <div className="h-px bg-border mb-2" />
         )}
         {!collapsed && user && (
-          <div className="px-2 py-1">
-            <div className="text-xs font-medium truncate">{user.displayName}</div>
-            <div className="text-[11px] text-muted-foreground truncate">{user.email}</div>
+          <div className="flex items-center gap-1 px-2 py-1">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate">{user.displayName}</div>
+              <div className="text-[11px] text-muted-foreground truncate">{user.email}</div>
+            </div>
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {collapsed && user && (
+          <div className="flex justify-center px-2 py-1">
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         )}
       </SidebarFooter>

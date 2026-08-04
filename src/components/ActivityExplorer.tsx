@@ -5,9 +5,10 @@
  * paginación. Adaptado de ChatExplorer.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowRightLeft, Bot, Headset, Search, X, ChevronRight,
-  Hash, Clock, Inbox, RefreshCw, Radio, ArrowDownLeft, ArrowUpRight,
+  Hash, Clock, Inbox, RefreshCw, Radio, ArrowDownLeft, ArrowUpRight, ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -134,7 +135,9 @@ function ActivityRow({ item, onClick }: { item: ActivityItem; onClick: () => voi
   );
 }
 
-function ActivityModal({ item, onClose }: { item: ActivityItem; onClose: () => void }) {
+function ActivityModal({ item, onClose, crmSubdomain }: {
+  item: ActivityItem; onClose: () => void; crmSubdomain?: string;
+}) {
   const cfg = TYPE_CONFIG[item.activity_type];
   const Icon = cfg.icon;
   const ts = item.created_at
@@ -144,7 +147,15 @@ function ActivityModal({ item, onClose }: { item: ActivityItem; onClose: () => v
       })
     : "—";
 
-  return (
+  // Solo confiable para human_agent_reply: ahí conversation_id es el lead_id
+  // de Kommo (viene del webhook de Digital Pipeline). Para bot_reply /
+  // lead_moved_column, conversation_id puede ser el talk_id de Kommo, un id
+  // distinto, así que no armamos el link para esos casos.
+  const leadUrl = crmSubdomain && item.conversation_id && item.activity_type === "human_agent_reply"
+    ? `https://${crmSubdomain}.kommo.com/leads/detail/${item.conversation_id}`
+    : null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
@@ -196,8 +207,23 @@ function ActivityModal({ item, onClose }: { item: ActivityItem; onClose: () => v
             <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">{item.message}</p>
           </div>
         )}
+
+        {leadUrl && (
+          <div className="px-5 pb-5">
+            <a
+              href={leadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Abrir conversación en Kommo
+            </a>
+          </div>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -210,9 +236,12 @@ interface Props {
    * ocultan los tabs de tipo (usado para secciones dedicadas, como
    * "Actividad respuesta humana"). */
   fixedType?: ActivityType;
+  /** Subdominio de Kommo del tenant (ej. "infoelectrorai"), para armar el
+   * link "Abrir conversación en Kommo" en el modal de detalle. */
+  crmSubdomain?: string;
 }
 
-export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedType }: Props) {
+export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedType, crmSubdomain }: Props) {
   const [hours,       setHours]       = useState(24);
   const [live,        setLive]        = useState(false);
   const [data,        setData]        = useState<ActivitiesResponse | null>(null);
@@ -474,7 +503,9 @@ export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedT
         )}
       </div>
 
-      {selected && <ActivityModal item={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <ActivityModal item={selected} onClose={() => setSelected(null)} crmSubdomain={crmSubdomain} />
+      )}
     </div>
   );
 }
