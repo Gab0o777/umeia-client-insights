@@ -7,6 +7,7 @@ import { useLiveTraffic } from "@/hooks/useLiveTraffic";
 import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { useCosts, costPrefix } from "@/hooks/useCosts";
 import { useAdsCosts } from "@/hooks/useAdsCosts";
+import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
 import { getBrandName } from "@/lib/whitelabel";
 import { useMonthlySummary, formatSavedHours, MINUTES_PER_AUTO_ACTION } from "@/hooks/useMonthlySummary";
 import {
@@ -167,6 +168,7 @@ export default function Resumen() {
   const costs = useCosts(tenant?.apiSlug, range.hours);
   const adsCosts = useAdsCosts(tenant?.apiSlug, range.hours);
   const monthly = useMonthlySummary(tenant?.apiSlug, range.hours); // resumen ejecutivo del período
+  const leadStatus = useLeadStatusReport(tenant?.apiSlug, range.hours); // leads ganados del período
   const navigate = useNavigate();
   const { messages, syncLabel } = useLiveTraffic(real.messages ?? 0);
   const [showKommo, setShowKommo] = useState(false);
@@ -244,7 +246,7 @@ export default function Resumen() {
           <KpiCard
             label="Costos de Ads"
             value={adsCosts.data.total_spend_usd}
-            prefix="US$ "
+            prefix={costPrefix(adsCosts.data.currency)}
             decimals={2}
             icon={Megaphone}
             accent="accent"
@@ -354,7 +356,7 @@ export default function Resumen() {
                 value: monthly.savedHours != null ? formatSavedHours(monthly.savedHours) : "—",
                 hint: `estimado · ${MINUTES_PER_AUTO_ACTION} min por conversación automatizada`,
               },
-              { icon: Target,        label: "Leads generados",        value: real.leads != null ? real.leads.toLocaleString("es-AR") : "—" },
+              { icon: Target,        label: "Leads ganados",          value: leadStatus.leadsWon != null ? leadStatus.leadsWon.toLocaleString("es-AR") : "—" },
             ] as { icon: typeof Clock; label: string; value: string; hint?: string }[]).map((item, i) => (
               <div key={i} className="rounded-xl border border-border bg-card/80 p-4 backdrop-blur">
                 <item.icon className="h-5 w-5 text-primary mb-2" />

@@ -20,7 +20,7 @@ export default function Actividad() {
   const { tenant } = useAuth();
   const [hours, setHours] = useState(24);
   const summary = useActivitySummary(tenant?.apiSlug, hours);
-  const report = useLeadStatusReport(tenant?.apiSlug);
+  const report = useLeadStatusReport(tenant?.apiSlug, hours);
   if (!tenant) return null;
 
   return (
@@ -68,7 +68,7 @@ export default function Actividad() {
       </div>
 
       {/* ── Actividad del CRM ── */}
-      <ColumnStatusCards apiSlug={tenant.apiSlug} />
+      <ColumnStatusCards apiSlug={tenant.apiSlug} hours={hours} />
 
       {/* ── Actividad de Tienda Nube (solo si está conectada) ── */}
       <EcommerceActivitySection apiSlug={tenant.apiSlug} hours={hours} />

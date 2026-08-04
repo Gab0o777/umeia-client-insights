@@ -1,18 +1,19 @@
 /**
  * ColumnStatusCards — sección "Actividad del CRM": una status card por
- * columna del pipeline (leads abiertos parados ahí) más, si el tenant tiene
- * configurado el hand-off a un humano, una card con los mensajes que
- * todavía no fueron respondidos en esa columna.
+ * columna del pipeline (leads abiertos parados ahí), una card de leads
+ * ganados en el período, y — si el tenant tiene configurado el hand-off a
+ * un humano — una card con los mensajes que todavía no fueron respondidos
+ * en esa columna.
  */
-import { Layers, UserCheck } from "lucide-react";
+import { Layers, Trophy, UserCheck } from "lucide-react";
 import { KpiCard } from "@/components/KpiCard";
 import { KpiSkeleton } from "@/components/Skeleton";
 import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
 
 const ACCENTS = ["primary", "info", "accent", "success", "warning"] as const;
 
-export function ColumnStatusCards({ apiSlug }: { apiSlug: string | undefined }) {
-  const report = useLeadStatusReport(apiSlug);
+export function ColumnStatusCards({ apiSlug, hours }: { apiSlug: string | undefined; hours?: number }) {
+  const report = useLeadStatusReport(apiSlug, hours);
 
   const title = report.crm
     ? `Actividad del CRM — ${report.crm.name} (${report.crm.subdomain})`
@@ -35,6 +36,19 @@ export function ColumnStatusCards({ apiSlug }: { apiSlug: string | undefined }) 
                 subtitle="Leads en esta columna"
               />
             ))
+        }
+
+        {report.loading
+          ? <KpiSkeleton />
+          : (
+            <KpiCard
+              label="Leads ganados"
+              value={report.leadsWon}
+              icon={Trophy}
+              accent="success"
+              subtitle="Ganados en el período seleccionado"
+            />
+          )
         }
 
         {!report.loading && report.hasHandoff && (

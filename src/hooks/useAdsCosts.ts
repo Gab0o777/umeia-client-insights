@@ -19,6 +19,8 @@ export interface AdsCostsResp {
   module_enabled: boolean;
   /** informativo — hay credenciales de Meta Ads cargadas (no bloquea el módulo) */
   connected: boolean;
+  /** Moneda de la cuenta de Meta Ads (ej. "ARS", "USD") — el monto ya viene en esta moneda. */
+  currency?: string | null;
   total_spend_usd?: number;
   by_day?: AdsCostDay[];
   by_platform?: AdsCostPlatform[];
