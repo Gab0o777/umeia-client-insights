@@ -6,6 +6,7 @@ import { ArrowRightLeft, Bot, Headset, ListTree, MessagesSquare, UserCheck } fro
 import { useActivitySummary } from "@/hooks/useActivitySummary";
 import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
 import { ColumnStatusCards } from "@/components/ColumnStatusCards";
+import { EcommerceActivitySection } from "@/components/EcommerceActivitySection";
 import { ActivityExplorer } from "@/components/ActivityExplorer";
 import { KpiSkeleton } from "@/components/Skeleton";
 
@@ -68,6 +69,9 @@ export default function Actividad() {
 
       {/* ── Actividad del CRM ── */}
       <ColumnStatusCards apiSlug={tenant.apiSlug} />
+
+      {/* ── Actividad de Tienda Nube (solo si está conectada) ── */}
+      <EcommerceActivitySection apiSlug={tenant.apiSlug} hours={hours} />
 
       {/* ── Actividad respuesta humana ── */}
       <div className="space-y-3">
