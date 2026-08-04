@@ -3,8 +3,11 @@
  * Izquierda: proporción de conversaciones respondidas vs. sin responder en
  * la(s) columna(s) de handoff (pie/donut). Derecha: antigüedad de esas
  * conversaciones — cuántos días llevan esperando — para ver si el backlog
- * se está acumulando. Solo se renderiza si el tenant tiene handoff
- * configurado (report.hasHandoff).
+ * se está acumulando. `ranges` (de donde sale la antigüedad) solo incluye
+ * leads con fecha de ingreso confirmada por un evento real de Kommo, así que
+ * puede sumar menos que el total de la izquierda — mejor mostrar menos y
+ * cierto que completar con una fecha aproximada. Solo se renderiza si el
+ * tenant tiene handoff configurado (report.hasHandoff).
  */
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { LeadStatusReport } from "@/hooks/useLeadStatusReport";
@@ -110,7 +113,9 @@ export function HumanAttentionChart({ report }: { report: LeadStatusReport }) {
         <div className="premium-card p-5">
           <div className="mb-4">
             <div className="text-sm font-semibold">Antigüedad en la columna</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Días que llevan las conversaciones esperando</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Días que llevan esperando — conversaciones con fecha de ingreso confirmada
+            </div>
           </div>
           {total === 0 ? (
             <div className="h-[180px] flex items-center justify-center">
