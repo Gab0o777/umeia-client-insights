@@ -24,10 +24,16 @@ export interface CrmInfo {
   subdomain: string;
 }
 
+export interface PipelineInfo {
+  pipeline_id: number;
+  pipeline_name: string | null;
+}
+
 interface LeadStatusReportResp {
   total_open: number;
   range_labels: string[];
   statuses: LeadStatusColumn[];
+  pipelines: PipelineInfo[];
   crm: CrmInfo | null;
   leads_won: number;
   human_handoff: { status_ids: number[]; pending_reply: number };
@@ -37,6 +43,7 @@ export interface LeadStatusReport {
   totalOpen:        number | null;
   columns:          LeadStatusColumn[];
   rangeLabels:      string[];
+  pipelines:        PipelineInfo[];
   crm:              CrmInfo | null;
   leadsWon:         number | null;
   pendingReply:     number | null;
@@ -46,7 +53,7 @@ export interface LeadStatusReport {
 }
 
 const EMPTY: LeadStatusReport = {
-  totalOpen: null, columns: [], rangeLabels: [], crm: null, leadsWon: null, pendingReply: null,
+  totalOpen: null, columns: [], rangeLabels: [], pipelines: [], crm: null, leadsWon: null, pendingReply: null,
   hasHandoff: false, handoffStatusIds: [], loading: true,
 };
 
@@ -68,6 +75,7 @@ export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): L
           totalOpen:        data.total_open,
           columns:          data.statuses,
           rangeLabels:      data.range_labels ?? [],
+          pipelines:        data.pipelines ?? [],
           crm:              data.crm,
           leadsWon:         data.leads_won ?? null,
           pendingReply:     data.human_handoff?.pending_reply ?? null,
