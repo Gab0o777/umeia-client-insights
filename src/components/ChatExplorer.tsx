@@ -9,10 +9,8 @@ import {
   Hash, Clock, Inbox, RefreshCw, Radio,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -202,6 +200,7 @@ function MessageModal({ msg, onClose }: { msg: ChatMsg; onClose: () => void }) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function ChatExplorer({ apiSlug }: { apiSlug: string }) {
+  const { accessToken, logout } = useAuth();
   const [hours,        setHours]        = useState(24);
   const [live,         setLive]         = useState(false);
   const [msgs,         setMsgs]         = useState<MessagesResponse | null>(null);
@@ -222,6 +221,7 @@ export function ChatExplorer({ apiSlug }: { apiSlug: string }) {
     const dir  = opts.dir    ?? msgDirection;
     const srch = opts.srch   ?? msgSearch;
 
+    if (!accessToken) return;
     setMsgsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -233,7 +233,8 @@ export function ChatExplorer({ apiSlug }: { apiSlug: string }) {
       if (dir !== "all")  params.set("direction", dir);
       if (srch.trim())    params.set("search", srch.trim());
 
-      const res = await fetch(`${API_BASE}/api/metrics/chat/messages?${params}`);
+      const res = await fetch(`${API_BASE}/api/metrics/chat/messages?${params}`, { headers: authHeaders(accessToken) });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         setMsgs(await res.json());
         setLastRefresh(new Date());
@@ -241,7 +242,7 @@ export function ChatExplorer({ apiSlug }: { apiSlug: string }) {
     } finally {
       setMsgsLoading(false);
     }
-  }, [apiSlug, hours, msgOffset, msgDirection, msgSearch]);
+  }, [apiSlug, accessToken, logout, hours, msgOffset, msgDirection, msgSearch]);
 
   // Carga inicial + cambio de rango
   useEffect(() => {

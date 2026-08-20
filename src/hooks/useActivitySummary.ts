@@ -4,10 +4,8 @@
  * página Actividad sin descargar el listado completo.
  */
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 export interface ActivitySummary {
   total:                       number | null;
@@ -31,10 +29,11 @@ interface Resp {
 }
 
 export function useActivitySummary(apiSlug: string | undefined, hours = 24): ActivitySummary {
+  const { accessToken, logout } = useAuth();
   const [s, setS] = useState<ActivitySummary>(EMPTY);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
     let cancelled = false;
     setS({ ...EMPTY });
 
@@ -44,8 +43,11 @@ export function useActivitySummary(apiSlug: string | undefined, hours = 24): Act
       limit: "1",
     });
 
-    fetch(`${API_BASE}/api/metrics/activities?${params}`)
-      .then(res => (res.ok ? res.json() as Promise<Resp> : null))
+    fetch(`${API_BASE}/api/metrics/activities?${params}`, { headers: authHeaders(accessToken) })
+      .then(res => {
+        if (res.status === 401) { logout(); return null; }
+        return res.ok ? (res.json() as Promise<Resp>) : null;
+      })
       .then(data => {
         if (cancelled || !data) return;
         setS({
@@ -62,7 +64,7 @@ export function useActivitySummary(apiSlug: string | undefined, hours = 24): Act
       });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, accessToken, hours]);
 
   return s;
 }

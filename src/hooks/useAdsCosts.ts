@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 export interface AdsCostDay {
   date: string;
@@ -33,22 +31,26 @@ export interface AdsCostsResp {
  * "costos_ads" está activo para el tenant.
  */
 export function useAdsCosts(apiSlug: string | undefined, hours: number) {
+  const { accessToken, logout } = useAuth();
   const [data, setData] = useState<AdsCostsResp | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
     let cancelled = false;
     setLoading(true);
 
-    fetch(`${API_BASE}/api/metrics/ads_costs?tenant_id=${encodeURIComponent(apiSlug)}&hours=${hours}`)
-      .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+    fetch(`${API_BASE}/api/metrics/ads_costs?tenant_id=${encodeURIComponent(apiSlug)}&hours=${hours}`, { headers: authHeaders(accessToken) })
+      .then(res => {
+        if (res.status === 401) { logout(); return Promise.reject(401); }
+        return res.ok ? res.json() : Promise.reject(res.status);
+      })
       .then((json: AdsCostsResp) => { if (!cancelled) setData(json); })
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, accessToken, hours]);
 
   return { data, loading };
 }

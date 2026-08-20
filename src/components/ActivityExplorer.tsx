@@ -11,10 +11,8 @@ import {
   Hash, Clock, Inbox, RefreshCw, Radio, ArrowDownLeft, ArrowUpRight, ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -242,6 +240,7 @@ interface Props {
 }
 
 export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedType, crmSubdomain }: Props) {
+  const { accessToken, logout } = useAuth();
   const [hours,       setHours]       = useState(24);
   const [live,        setLive]        = useState(false);
   const [data,        setData]        = useState<ActivitiesResponse | null>(null);
@@ -264,6 +263,7 @@ export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedT
     const srch = opts.srch   ?? search;
     const lead = opts.lead   ?? leadFilter;
 
+    if (!accessToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -276,7 +276,8 @@ export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedT
       if (srch.trim())     params.set("search", srch.trim());
       if (lead.trim())     params.set("conversation_id", lead.trim());
 
-      const res = await fetch(`${API_BASE}/api/metrics/activities?${params}`);
+      const res = await fetch(`${API_BASE}/api/metrics/activities?${params}`, { headers: authHeaders(accessToken) });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         setData(await res.json());
         setLastRefresh(new Date());
@@ -284,13 +285,13 @@ export function ActivityExplorer({ apiSlug, title = "Actividad reciente", fixedT
     } finally {
       setLoading(false);
     }
-  }, [apiSlug, hours, offset, type, search, leadFilter]);
+  }, [apiSlug, accessToken, logout, hours, offset, type, search, leadFilter]);
 
   // Carga inicial + cambio de rango
   useEffect(() => {
     setOffset(0);
     fetchActivities({ offset: 0 });
-  }, [apiSlug, hours]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiSlug, accessToken, hours]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cambio de filtros
   useEffect(() => {

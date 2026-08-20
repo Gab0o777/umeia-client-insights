@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 /**
  * Minutos de trabajo humano que ahorra cada conversación atendida de forma
@@ -39,23 +37,31 @@ export interface MonthlySummary {
  * el dato real — nunca estimaciones sin base.
  */
 export function useMonthlySummary(apiSlug: string | undefined, hours: number): MonthlySummary {
+  const { accessToken, logout } = useAuth();
   const [summary, setSummary] = useState<Omit<MonthlySummary, "loading">>({
     messages: null, automationPct: null, savedHours: null,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
     let cancelled = false;
     setLoading(true);
     setSummary({ messages: null, automationPct: null, savedHours: null });
 
     const tid = encodeURIComponent(apiSlug);
-    const chatReq = fetch(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${hours}`)
-      .then(res => (res.ok ? (res.json() as Promise<ChatResp>) : null))
+    const headers = authHeaders(accessToken);
+    const chatReq = fetch(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${hours}`, { headers })
+      .then(res => {
+        if (res.status === 401) { logout(); return null; }
+        return res.ok ? (res.json() as Promise<ChatResp>) : null;
+      })
       .catch(() => null);
-    const autoReq = fetch(`${API_BASE}/api/metrics/automation?tenant_id=${tid}&hours=${hours}`)
-      .then(res => (res.ok ? (res.json() as Promise<AutomationResp>) : null))
+    const autoReq = fetch(`${API_BASE}/api/metrics/automation?tenant_id=${tid}&hours=${hours}`, { headers })
+      .then(res => {
+        if (res.status === 401) { logout(); return null; }
+        return res.ok ? (res.json() as Promise<AutomationResp>) : null;
+      })
       .catch(() => null);
 
     Promise.all([chatReq, autoReq]).then(([chat, auto]) => {
@@ -73,7 +79,7 @@ export function useMonthlySummary(apiSlug: string | undefined, hours: number): M
     });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, accessToken, hours]);
 
   return { ...summary, loading };
 }

@@ -8,10 +8,7 @@ import {
   Clock, Tag, Zap, DollarSign, Megaphone, CheckCircle2, MinusCircle, LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 interface ModuleInfo {
   id: string;
@@ -104,7 +101,7 @@ function ModuleCard({
 }
 
 export default function Modulos() {
-  const { tenant } = useAuth();
+  const { tenant, accessToken, logout } = useAuth();
   const [data, setData] = useState<ModulesResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -112,15 +109,18 @@ export default function Modulos() {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const load = useCallback(() => {
-    if (!tenant?.apiSlug) return;
+    if (!tenant?.apiSlug || !accessToken) return;
     setLoading(true);
     setError(false);
-    fetch(`${API_BASE}/api/metrics/modules?tenant_id=${encodeURIComponent(tenant.apiSlug)}`)
-      .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+    fetch(`${API_BASE}/api/metrics/modules?tenant_id=${encodeURIComponent(tenant.apiSlug)}`, { headers: authHeaders(accessToken) })
+      .then(res => {
+        if (res.status === 401) { logout(); return Promise.reject(401); }
+        return res.ok ? res.json() : Promise.reject(res.status);
+      })
       .then((json: ModulesResp) => setData(json))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [tenant?.apiSlug]);
+  }, [tenant?.apiSlug, accessToken, logout]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -145,9 +145,10 @@ export default function Modulos() {
     try {
       const res = await fetch(`${API_BASE}/api/metrics/modules/toggle`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders(accessToken) },
         body: JSON.stringify({ tenant_id: tenant.apiSlug, module_id: mod.id, enabled: next }),
       });
+      if (res.status === 401) { logout(); throw new Error("401"); }
       if (!res.ok) throw new Error(String(res.status));
     } catch {
       setData(prev => prev && {

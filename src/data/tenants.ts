@@ -52,9 +52,3 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     },
   },
 };
-
-// Credenciales demo hardcodeadas (fallback cuando Supabase no está disponible)
-export const USER_CREDENTIALS: Record<string, { password: string; tenantId: TenantId; displayName: string }> = {
-  "gabo@demo.com":            { password: "123456",   tenantId: "electro-rai",       displayName: "Gabo" },
-  "onpremise@demo.umeia.io":  { password: "demo1234", tenantId: "centro-copacabana", displayName: "On-Premise Demo" },
-};

@@ -6,10 +6,8 @@
  */
 
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 export interface DayPoint     { day: string; auto: number; human: number; }
 export interface IntentPoint  { intent: string; value: number; }
@@ -58,9 +56,10 @@ const EMPTY: RealMetrics = {
   error: false,
 };
 
-async function get<T>(url: string): Promise<T | null> {
+async function get<T>(url: string, token: string, onUnauthorized: () => void): Promise<T | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: authHeaders(token) });
+    if (res.status === 401) { onUnauthorized(); return null; }
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch (err) {
@@ -83,10 +82,12 @@ interface DayResp     { days: DayPoint[]; }
 interface ChartsResp  { by_channel: ChannelPoint[]; by_hour: HourPoint[]; by_intent: IntentPoint[]; }
 
 export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 14): RealMetrics {
+  const { accessToken, logout } = useAuth();
   const [m, setM] = useState<RealMetrics>(EMPTY);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
+    const token = accessToken;
     let cancelled = false;
 
     // Reset al cambiar tenant/hours/days
@@ -110,7 +111,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
     };
 
     // ── 1a. Chat KPIs (mensajes + convos) ──────────────────────────────
-    const chatPromise = get<ChatResp>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`)
+    const chatPromise = get<ChatResp>(`${API_BASE}/api/metrics/chat?tenant_id=${tid}&hours=${h}`, token, logout)
       .then(chat => {
         patch({
           messages:        chat?.total_inbound ?? null,
@@ -126,7 +127,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
     // de atención humana / total de leads), cubriendo también el tráfico
     // que el Salesbot de Kommo atiende sin pasar por la API.
     // Si el tenant no lo tiene configurado, cae al rate basado en chat.
-    get<AutomationResp>(`${API_BASE}/api/metrics/automation?tenant_id=${tid}&hours=${h}`)
+    get<AutomationResp>(`${API_BASE}/api/metrics/automation?tenant_id=${tid}&hours=${h}`, token, logout)
       .then(async auto => {
         let rate = auto?.automation_rate ?? null;
         if (rate === null) {
@@ -141,7 +142,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
       });
 
     // ── 2. Leads (Kommo) — puede ser lento, no bloquea a nadie ────────
-    get<KommoResp>(`${API_BASE}/api/metrics/kommo_leads`)
+    get<KommoResp>(`${API_BASE}/api/metrics/kommo_leads?tenant_id=${tid}`, token, logout)
       .then(kommo => {
         const entry = kommo?.tenants?.find(k => k.tenant_id === apiSlug);
         patch({
@@ -151,7 +152,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
       });
 
     // ── 3. Mensajes por día — respeta la cantidad de días del filtro ───
-    get<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=${d}`)
+    get<DayResp>(`${API_BASE}/api/metrics/messages_by_day?tenant_id=${tid}&days=${d}`, token, logout)
       .then(data => {
         patch({
           messagesByDay:        data?.days ?? [],
@@ -163,7 +164,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
     // Respeta el rango de tiempo seleccionado y envía el offset horario
     // del navegador para que "Por horario" se agrupe en hora local.
     const tzOffset = -new Date().getTimezoneOffset(); // minutos al este de UTC (UY = -180)
-    get<ChartsResp>(`${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=${h}&tz_offset_minutes=${tzOffset}`)
+    get<ChartsResp>(`${API_BASE}/api/metrics/chat/charts?tenant_id=${tid}&hours=${h}&tz_offset_minutes=${tzOffset}`, token, logout)
       .then(data => {
         patch({
           byChannel:     data?.by_channel ?? [],
@@ -174,7 +175,7 @@ export function useRealMetrics(apiSlug: string | undefined, hours = 720, days = 
       });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours, days]);
+  }, [apiSlug, accessToken, hours, days]);
 
   return m;
 }

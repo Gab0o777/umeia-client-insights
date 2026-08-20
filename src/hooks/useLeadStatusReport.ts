@@ -5,10 +5,8 @@
  * respeta la ventana de tiempo — el resto es una foto siempre actual).
  */
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 export interface LeadStatusColumn {
   status_id: number;
@@ -58,17 +56,21 @@ const EMPTY: LeadStatusReport = {
 };
 
 export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): LeadStatusReport {
+  const { accessToken, logout } = useAuth();
   const [s, setS] = useState<LeadStatusReport>(EMPTY);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
     let cancelled = false;
     setS({ ...EMPTY });
 
     const params = new URLSearchParams({ tenant_id: apiSlug, hours: String(hours) });
 
-    fetch(`${API_BASE}/api/metrics/lead-status-report?${params}`)
-      .then(res => (res.ok ? res.json() as Promise<LeadStatusReportResp> : null))
+    fetch(`${API_BASE}/api/metrics/lead-status-report?${params}`, { headers: authHeaders(accessToken) })
+      .then(res => {
+        if (res.status === 401) { logout(); return null; }
+        return res.ok ? (res.json() as Promise<LeadStatusReportResp>) : null;
+      })
       .then(data => {
         if (cancelled || !data) return;
         setS({
@@ -89,7 +91,7 @@ export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): L
       });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, accessToken, hours]);
 
   return s;
 }

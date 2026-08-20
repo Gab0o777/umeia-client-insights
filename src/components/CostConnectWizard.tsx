@@ -5,10 +5,8 @@ import {
   CheckCircle2, Loader2, KeyRound, Hash, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 interface Props {
   apiSlug: string;
@@ -22,6 +20,7 @@ interface Props {
  * se valida exitosamente contra Meta — sin conexión no hay módulo.
  */
 export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
+  const { accessToken, logout } = useAuth();
   const [step, setStep] = useState(0);
   const [wabaId, setWabaId] = useState("");
   const [token, setToken] = useState("");
@@ -34,11 +33,18 @@ export function CostConnectWizard({ apiSlug, onClose, onConnected }: Props) {
     setBusy(true);
     setError(null);
     try {
+      // NOTA: este wizard también se usa desde /conectar-costos/:tenantSlug
+      // (ConectarCostos.tsx), un link público sin login — ahí accessToken es
+      // null y el request sale sin Authorization a propósito.
       const res = await fetch(`${API_BASE}/api/metrics/costs/connect`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders(accessToken) },
         body: JSON.stringify({ tenant_id: apiSlug, waba_id: wabaId.trim(), access_token: token.trim() }),
       });
+      // 401 solo puede pasar en el flujo autenticado (con accessToken) — el
+      // link público no manda Authorization, así que no puede ser rechazado
+      // por sesión expirada.
+      if (res.status === 401 && accessToken) { logout(); return; }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json?.detail ?? "No se pudo validar la conexión. Revisá los datos e intentá de nuevo.");

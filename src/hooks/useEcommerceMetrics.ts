@@ -5,10 +5,8 @@
  * pueda ocultar en vez de mostrar tarjetas vacías.
  */
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.DEV
-  ? "/umeia-api"
-  : (import.meta.env.VITE_API_URL ?? "https://umeia.space");
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 export interface EcommerceMetrics {
   connected:              boolean;
@@ -33,17 +31,21 @@ interface Resp {
 }
 
 export function useEcommerceMetrics(apiSlug: string | undefined, hours = 24): EcommerceMetrics {
+  const { accessToken, logout } = useAuth();
   const [s, setS] = useState<EcommerceMetrics>(EMPTY);
 
   useEffect(() => {
-    if (!apiSlug) return;
+    if (!apiSlug || !accessToken) return;
     let cancelled = false;
     setS({ ...EMPTY });
 
     const params = new URLSearchParams({ tenant_id: apiSlug, hours: String(hours) });
 
-    fetch(`${API_BASE}/api/metrics/ecommerce?${params}`)
-      .then(res => (res.ok ? res.json() as Promise<Resp> : null))
+    fetch(`${API_BASE}/api/metrics/ecommerce?${params}`, { headers: authHeaders(accessToken) })
+      .then(res => {
+        if (res.status === 401) { logout(); return null; }
+        return res.ok ? (res.json() as Promise<Resp>) : null;
+      })
       .then(data => {
         if (cancelled) return;
         if (!data) {
@@ -64,7 +66,7 @@ export function useEcommerceMetrics(apiSlug: string | undefined, hours = 24): Ec
       });
 
     return () => { cancelled = true; };
-  }, [apiSlug, hours]);
+  }, [apiSlug, accessToken, hours]);
 
   return s;
 }

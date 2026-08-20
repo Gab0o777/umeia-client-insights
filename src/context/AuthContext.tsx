@@ -1,36 +1,78 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { USER_CREDENTIALS, TENANTS, Tenant, TenantId } from "@/data/tenants";
+import { Session } from "@supabase/supabase-js";
+import { TENANTS, Tenant, TenantId } from "@/data/tenants";
 import { supabase } from "@/lib/supabase";
+import { API_BASE, authHeaders } from "@/lib/apiClient";
 
 interface AuthState {
-  email:        string;
-  tenantId:     string;
-  displayName:  string;
-  fromSupabase?: boolean;
+  email:       string;
+  tenantId:    string;
+  displayName: string;
 }
 
 interface AuthContextValue {
   user:         AuthState | null;
   tenant:       Tenant | null;
-  initializing: boolean;           // true mientras se restaura sesión de localStorage
+  session:      Session | null;
+  accessToken:  string | null;
+  initializing: boolean;           // true mientras se restaura la sesión de Supabase
   login:  (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const STORAGE_KEY = "umeia.portal.session";
+
+interface PortalMeResp {
+  tenant_id:    string;
+  display_name: string;
+  email:        string;
+}
+
+async function fetchPortalProfile(token: string): Promise<AuthState | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/portal/me`, { headers: authHeaders(token) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as PortalMeResp;
+    return { email: data.email, tenantId: data.tenant_id, displayName: data.display_name };
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session,      setSession]      = useState<Session | null>(null);
   const [user,         setUser]         = useState<AuthState | null>(null);
-  const [initializing, setInitializing] = useState(true); // bloquea redirect hasta leer storage
+  const [initializing, setInitializing] = useState(true);
 
-  // Restaurar sesión al montar — SINCRÓNICO para evitar flash de login
+  // Fuente única de verdad para la sesión: Supabase Auth. Se resuelve una
+  // vez al montar y se mantiene sincronizada (incluye refresh de token)
+  // vía onAuthStateChange, así ningún componente hijo arranca con una
+  // copia stale mientras la sesión real ya cambió.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
-    } catch { /* storage corrupto — lo ignoramos */ }
-    finally { setInitializing(false); }
+    let cancelled = false;
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (cancelled) return;
+      setSession(data.session);
+      if (data.session) {
+        const profile = await fetchPortalProfile(data.session.access_token);
+        if (!cancelled) setUser(profile);
+      }
+      if (!cancelled) setInitializing(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      if (cancelled) return;
+      setSession(newSession);
+      if (newSession) {
+        const profile = await fetchPortalProfile(newSession.access_token);
+        if (!cancelled) setUser(profile);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
 
   const login = async (
@@ -39,56 +81,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<{ ok: true } | { ok: false; error: string }> => {
     const normalized = email.trim().toLowerCase();
 
-    // 1. Supabase (tenant_portal_users)
-    try {
-      const { data, error } = await supabase
-        .from("tenant_portal_users")
-        .select("id, tenant_id, email, password, display_name, portal_view")
-        .eq("email", normalized)
-        .maybeSingle();
-
-      if (!error && data) {
-        if (data.password !== password)
-          return { ok: false, error: "Credenciales inválidas. Verificá email y contraseña." };
-
-        const session: AuthState = {
-          email:        normalized,
-          tenantId:     data.portal_view || data.tenant_id,
-          displayName:  data.display_name || normalized,
-          fromSupabase: true,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-        setUser(session);
-        return { ok: true };
-      }
-    } catch (err) {
-      console.warn("[auth] Supabase no disponible, usando credenciales locales:", err);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalized,
+      password,
+    });
+    if (error || !data.session) {
+      return { ok: false, error: "Credenciales inválidas. Verificá email y contraseña." };
     }
 
-    // 2. Fallback hardcodeado (demo / offline)
-    const record = USER_CREDENTIALS[normalized];
-    if (!record || record.password !== password)
-      return { ok: false, error: "Credenciales inválidas. Verificá email y contraseña." };
+    const profile = await fetchPortalProfile(data.session.access_token);
+    if (!profile) {
+      await supabase.auth.signOut();
+      return { ok: false, error: "Tu cuenta no tiene acceso al portal. Contactá a tu referente." };
+    }
 
-    const session: AuthState = {
-      email:       normalized,
-      tenantId:    record.tenantId,
-      displayName: record.displayName,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    setUser(session);
+    setSession(data.session);
+    setUser(profile);
     return { ok: true };
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    supabase.auth.signOut();
+    setSession(null);
     setUser(null);
   };
 
-  const tenant = user ? (TENANTS[user.tenantId as TenantId] ?? null) : null;
+  // El tenant_id que devuelve el backend puede venir como slug de API
+  // ("electrorai") o como id de la tabla local ("electro-rai") — probamos
+  // ambos para no depender de que coincidan exactamente.
+  const tenant = user
+    ? (TENANTS[user.tenantId as TenantId] ??
+       Object.values(TENANTS).find(t => t.apiSlug === user.tenantId) ??
+       null)
+    : null;
+
+  const accessToken = session?.access_token ?? null;
 
   return (
-    <AuthContext.Provider value={{ user, tenant, initializing, login, logout }}>
+    <AuthContext.Provider value={{ user, tenant, session, accessToken, initializing, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
