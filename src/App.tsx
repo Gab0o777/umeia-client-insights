@@ -21,6 +21,7 @@ import Modulos from "./pages/Modulos";
 import Infraestructura from "./pages/Infraestructura";
 import Insights from "./pages/Insights";
 import Tickets from "./pages/Tickets";
+import Documentos from "./pages/Documentos";
 import Configuracion from "./pages/Configuracion";
 import ConectarCostos from "./pages/ConectarCostos";
 import NotFound from "./pages/NotFound";
@@ -56,6 +57,7 @@ const App = () => (
                 <Route path="/infraestructura" element={<Infraestructura />} />
                 <Route path="/insights" element={<Insights />} />
                 <Route path="/tickets" element={<Tickets />} />
+                <Route path="/documentos" element={<Documentos />} />
                 <Route path="/configuracion" element={<Configuracion />} />
               </Route>
               <Route path="*" element={<NotFound />} />
