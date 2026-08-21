@@ -39,6 +39,52 @@ async function fetchPortalProfile(token: string): Promise<AuthState | null> {
   }
 }
 
+interface PortalBlock {
+  name:          string;
+  type:          "cloud" | "on-premise";
+  vertical:      string;
+  vertical_label: string;
+  whatsapp: {
+    number:    string;
+    connected: boolean;
+    cloud_api: boolean;
+    mode:      string;
+  };
+}
+
+// Onboardear un tenant nuevo (alta en el admin + tenant_configs/{slug}.json
+// con su bloque `portal`) alcanza para que aparezca acá — sin esto, cada
+// cliente nuevo requería además una PR a mano a este archivo (ver TENANTS
+// más abajo, que se mantiene solo como fallback para los tenants legacy).
+async function fetchTenantPortalInfo(token: string, apiSlug: string): Promise<Tenant | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/metrics/tenant-info?tenant_id=${encodeURIComponent(apiSlug)}`,
+      { headers: authHeaders(token) },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { portal: PortalBlock | null };
+    if (!data.portal) return null;
+    const p = data.portal;
+    return {
+      id:            apiSlug,
+      apiSlug,
+      name:          p.name,
+      type:          p.type,
+      vertical:      p.vertical,
+      verticalLabel: p.vertical_label,
+      whatsapp: {
+        number:    p.whatsapp.number,
+        connected: p.whatsapp.connected,
+        cloudApi:  p.whatsapp.cloud_api,
+        mode:      p.whatsapp.mode,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session,      setSession]      = useState<Session | null>(null);
   const [user,         setUser]         = useState<AuthState | null>(null);
@@ -109,13 +155,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // El tenant_id que devuelve el backend puede venir como slug de API
   // ("electrorai") o como id de la tabla local ("electro-rai") — probamos
   // ambos para no depender de que coincidan exactamente.
-  const tenant = user
+  const staticTenant = user
     ? (TENANTS[user.tenantId as TenantId] ??
        Object.values(TENANTS).find(t => t.apiSlug === user.tenantId) ??
        null)
     : null;
 
   const accessToken = session?.access_token ?? null;
+
+  // Fuente dinámica: tenant_configs/{slug}.json → /api/metrics/tenant-info.
+  // El mapa estático (TENANTS) queda como fallback instantáneo (evita el
+  // parpadeo mientras resuelve el fetch) y como respaldo si el tenant
+  // todavía no tiene bloque `portal` en su config.
+  const [tenant, setTenant] = useState<Tenant | null>(staticTenant);
+
+  useEffect(() => {
+    if (!user || !accessToken) {
+      setTenant(null);
+      return;
+    }
+    setTenant(staticTenant);
+    let cancelled = false;
+    const apiSlug = staticTenant?.apiSlug ?? user.tenantId;
+    fetchTenantPortalInfo(accessToken, apiSlug).then((dynamic) => {
+      if (!cancelled && dynamic) setTenant(dynamic);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.tenantId, accessToken]);
 
   return (
     <AuthContext.Provider value={{ user, tenant, session, accessToken, initializing, login, logout }}>

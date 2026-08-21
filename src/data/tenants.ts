@@ -5,7 +5,7 @@ export type TenantId   = "electro-rai" | "centro-copacabana" | "gremio";
 export type TenantType = "cloud" | "on-premise";
 
 export interface TenantConfig {
-  id:            TenantId;
+  id:            string;      // TenantId para los tenants legacy del mapa estático, o el apiSlug para tenants nuevos resueltos dinámicamente
   apiSlug:       string;      // slug que usa el backend (e.g. "electrorai")
   name:          string;
   type:          TenantType;
