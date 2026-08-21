@@ -5,7 +5,7 @@ import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
 import { API_BASE, authHeaders } from "@/lib/apiClient";
 import {
   FileCheck2, Clock, CheckCircle2, XCircle, Loader2,
-  RefreshCw, ExternalLink, LifeBuoy,
+  RefreshCw, ExternalLink, LifeBuoy, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +58,41 @@ const SOLICITUD_STATUS_CONFIG: Record<Solicitud["status"], { label: string; colo
   cerrado:      { label: "Cerrado",      color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
 };
 
+// Un contacto = una conversation_id (todos los archivos de un mismo wizard
+// de collect_files comparten la misma). El nombre/DNI se toma del primer
+// documento del grupo que lo tenga — así las cards dejan de mostrar sueltos
+// ids de conversación ilegibles y se agrupan por a quién pertenecen.
+interface ContactoGroup {
+  conversationId: string;
+  nombre: string | null;
+  dni: string | null;
+  docs: Documento[];
+  pendingCount: number;
+  lastReceivedAt: string;
+}
+
+function groupDocumentosByContacto(docs: Documento[]): ContactoGroup[] {
+  const byConv = new Map<string, Documento[]>();
+  for (const doc of docs) {
+    const list = byConv.get(doc.conversation_id);
+    if (list) list.push(doc);
+    else byConv.set(doc.conversation_id, [doc]);
+  }
+  const groups: ContactoGroup[] = Array.from(byConv.entries()).map(([conversationId, groupDocs]) => {
+    const withNombre = groupDocs.find((d) => d.solicitante_nombre);
+    const withDni = groupDocs.find((d) => d.solicitante_dni);
+    return {
+      conversationId,
+      nombre: withNombre?.solicitante_nombre ?? null,
+      dni: withDni?.solicitante_dni ?? null,
+      docs: groupDocs,
+      pendingCount: groupDocs.filter((d) => d.status === "recibido" || d.status === "pendiente_revision").length,
+      lastReceivedAt: groupDocs.reduce((max, d) => (d.received_at > max ? d.received_at : max), groupDocs[0].received_at),
+    };
+  });
+  return groups.sort((a, b) => (a.pendingCount !== b.pendingCount ? b.pendingCount - a.pendingCount : b.lastReceivedAt.localeCompare(a.lastReceivedAt)));
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-AR", {
     day: "2-digit", month: "short", year: "numeric",
@@ -94,12 +129,6 @@ function DocumentoCard({ doc, onDecide }: { doc: Documento; onDecide: (id: numbe
       </div>
 
       <div className="text-sm font-medium">{doc.label}</div>
-      {(doc.solicitante_nombre || doc.solicitante_dni) && (
-        <div className="text-xs text-muted-foreground">
-          {doc.solicitante_nombre ?? "—"} {doc.solicitante_dni ? `· DNI ${doc.solicitante_dni}` : ""}
-        </div>
-      )}
-      <div className="text-[11px] text-muted-foreground">Conversación: {doc.conversation_id}</div>
 
       <a
         href={doc.file_url}
@@ -160,6 +189,37 @@ function DocumentoCard({ doc, onDecide }: { doc: Documento; onDecide: (id: numbe
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ContactoGroupCard({ group, onDecide }: { group: ContactoGroup; onDecide: (id: number, status: DocumentoStatus, reason?: string) => void }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-secondary/10 p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary shrink-0">
+            <User className="w-4 h-4" />
+          </span>
+          <div>
+            <div className="text-sm font-semibold leading-tight">
+              {group.nombre ?? `Contacto sin nombre`}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {group.dni ? `DNI ${group.dni}` : `Conversación ${group.conversationId}`}
+            </div>
+          </div>
+        </div>
+        {group.pendingCount > 0 && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border text-amber-400 bg-amber-500/10 border-amber-500/20">
+            {group.pendingCount} pendiente{group.pendingCount > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {group.docs.map((doc) => <DocumentoCard key={doc.id} doc={doc} onDecide={onDecide} />)}
+      </div>
     </div>
   );
 }
@@ -276,8 +336,10 @@ export default function Documentos() {
         documentos.length === 0 ? (
           <EmptyData message="Todavía no se recibió documentación por este canal." />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {documentos.map((doc) => <DocumentoCard key={doc.id} doc={doc} onDecide={handleDecide} />)}
+          <div className="space-y-4">
+            {groupDocumentosByContacto(documentos).map((group) => (
+              <ContactoGroupCard key={group.conversationId} group={group} onDecide={handleDecide} />
+            ))}
           </div>
         )
       ) : solicitudes.length === 0 ? (
