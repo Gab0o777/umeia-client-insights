@@ -1,7 +1,7 @@
 // Configuración de tenants — solo datos de setup, CERO datos de métricas.
 // Los números reales vienen de useRealMetrics → umeia.space/api/metrics/*
 
-export type TenantId   = "electro-rai" | "centro-copacabana";
+export type TenantId   = "electro-rai" | "centro-copacabana" | "gremio";
 export type TenantType = "cloud" | "on-premise";
 
 export interface TenantConfig {
@@ -49,6 +49,22 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
       connected: true,
       cloudApi:  false,
       mode:      "Integración local / proveedor externo",
+    },
+  },
+  "gremio": {
+    id:            "gremio",
+    apiSlug:       "gremio",
+    name:          "Gremio",
+    type:          "cloud",
+    vertical:      "educacion",
+    verticalLabel: "Instituto educativo",
+    whatsapp: {
+      // Número de prueba compartido (Zernio + Chatwoot en Railway) —
+      // actualizar cuando Gremio conecte su número real de producción.
+      number:    "+54 9 11 5470-9643",
+      connected: true,
+      cloudApi:  false,
+      mode:      "Zernio (BSP) + Chatwoot",
     },
   },
 };
