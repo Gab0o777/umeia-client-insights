@@ -38,15 +38,6 @@ function personNoun(vertical: string): string {
   return PERSON_NOUN[vertical] ?? "clientes";
 }
 
-/** Solo se muestra cuando la razón es una comparación confiable (mismo
- * sistema/unidad en ambos lados) — ver comentario en `ActividadV2`. */
-function pct(from: number, to: number): string | null {
-  if (from <= 0) return null;
-  const ratio = (to / from) * 100;
-  if (ratio > 150) return null;
-  return `${(Math.round(ratio * 10) / 10).toLocaleString("es-AR")}%`;
-}
-
 const TOOLTIP_STYLE = {
   background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))",
   borderRadius: 8, fontSize: 12,
@@ -64,41 +55,33 @@ export default function ActividadV2() {
 
   const noun = personNoun(tenant.vertical);
 
-  // El embudo completo (conversaciones → avanzaron → llegaron a X) solo
-  // puede medirse con porcentajes reales cuando los 3 pasos viven en el
-  // MISMO sistema — "conversaciones" (chat_messages) y "leads avanzaron"
-  // (lead_tracking, TODOS los pipelines) son universos distintos, y sumar
-  // pipelines sin filtrar mete de más leads que nunca tuvieron una
-  // conversación en el período (moves por automatizaciones, otro pipeline
-  // sin relación, etc.) — por eso 3.104 conversaciones podían "avanzar"
-  // 4.494 leads, un número imposible.
+  // Los 3 números del "recorrido" salen de sistemas distintos y NO hay forma
+  // de unirlos hoy: `chat_messages` (conversaciones) solo tiene
+  // `conversation_id`, `lead_tracking` (leads/embudo) solo tiene `lead_id` —
+  // no existe una columna que los relacione. Ya probamos forzar
+  // "conversaciones" a salir del lado del CRM (`first_period_total`, leads
+  // que se MUEVEN hacia la primera columna) y el resultado fue peor: un lead
+  // nuevo no "se mueve" a su primera columna, nace ahí directamente, así que
+  // ese conteo daba ~0 aunque hubiera actividad real.
   //
-  // Fix: una vez que el tenant configura un estado final por pipeline
-  // (`funnelStages` / `funnel_outcome_status_ids`), escopeamos LOS 3 PASOS
-  // a esos mismos pipelines y usamos `first_period_total` (leads que
-  // entraron al embudo, mismo `lead_id` que el resto) en vez del conteo de
-  // conversaciones de chat — ahí sí los 3 números miden lo mismo y el % es
-  // real. Sin esa config, degradamos a una aproximación de 2 pasos sin %.
-  const funnelPipelineIds = new Set(report.funnelStages.map(f => f.pipeline_id));
-  const hasFunnelConfig = funnelPipelineIds.size > 0;
+  // Por eso cada número se muestra con la fuente que SÍ puede medir lo que
+  // dice, y no mostramos ningún % entre "conversaciones" y "leads
+  // avanzaron" — sería comparar peras con manzanas sin importar la fórmula.
+  // "leads avanzaron" → "llegaron a X" sí es 100% CRM (mismo lead_id), pero
+  // igual no le ponemos %: ese mismo dato ya tiene un % confiable y sin
+  // ambigüedad en "¿En qué terminaron las consultas?" (OutcomeBreakdown),
+  // calculado sobre el mismo total para todas las columnas — mostrar OTRO %
+  // acá, con otra base, para el mismo número (251 en ambos lados) es lo que
+  // se veía como "cosas raras" (5,6% acá vs. 4,1% ahí).
+  const conversations = overview.conversationCounts.bot_reply;
+  const moved = report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
 
   const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
   const finalLabel = topFinalStage?.final_status_name ?? null;
-
-  const conversations = hasFunnelConfig
-    ? report.funnelStages.reduce((sum, f) => sum + f.first_period_total, 0)
-    : overview.conversationCounts.bot_reply;
-
-  const moved = hasFunnelConfig
-    ? report.pipelinesPeriodStats
-        .filter(p => funnelPipelineIds.has(p.pipeline_id))
-        .reduce((sum, p) => sum + p.leads_active, 0)
-    : report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
-
-  const reached = hasFunnelConfig ? topFinalStage?.final_period_total ?? 0 : null;
+  const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
@@ -194,17 +177,7 @@ export default function ActividadV2() {
               ? [{ label: `llegaron a ${finalLabel}`, value: reached, accent: "success" as const }]
               : []),
           ]}
-          transitions={
-            // Solo hay % (real) cuando hasFunnelConfig es true — es la única
-            // rama donde `finalLabel`/`reached` están seteados, así que acá
-            // los 3 números ya están escopeados al mismo sistema.
-            finalLabel && reached !== null
-              ? [
-                  { verb: "avanzó", percent: pct(conversations, moved) },
-                  { verb: `llega a ${finalLabel}`, percent: pct(moved, reached) },
-                ]
-              : [{ verb: "avanzó" }]
-          }
+          transitions={finalLabel && reached !== null ? ["avanzó", `llega a ${finalLabel}`] : ["avanzó"]}
         />
       )}
 

@@ -3,10 +3,13 @@
  * su propia mini-card con borde (mismo lenguaje visual que un KpiCard).
  * Parte de Actividad v2.
  *
- * El % entre pasos es opcional a propósito: solo tiene sentido cuando todos
- * los pasos salen del mismo sistema/unidad (ver `ActividadV2.tsx`, que decide
- * cuándo calcularlo) — este componente no asume nada, solo muestra lo que le
- * pasan.
+ * Sin porcentajes entre pasos, a propósito: "conversaciones" sale de
+ * `chat_messages` (conversation_id) y "leads avanzaron"/el paso final salen
+ * de `lead_tracking` (lead_id) — no hay columna que una esas dos tablas hoy,
+ * así que ningún % entre esos pasos puede ser honesto. El % de "en qué
+ * terminaron las consultas" SÍ es confiable y vive en `OutcomeBreakdown`
+ * (mismo total para todas las partes) — mostrar OTRO % acá, con otra base,
+ * para el mismo número, es lo que generaba números contradictorios.
  */
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
@@ -15,12 +18,6 @@ export interface FunnelStep {
   label: string;
   value: number;
   accent: "accent" | "info" | "success";
-}
-
-export interface FunnelTransition {
-  verb: string;
-  /** Ya formateado, ej. "51,6%". Omitir cuando no es una comparación confiable. */
-  percent?: string | null;
 }
 
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
@@ -40,8 +37,8 @@ export function PatientJourneyFunnel({
 }: {
   title: string;
   steps: FunnelStep[];
-  /** longitud steps.length - 1 */
-  transitions: FunnelTransition[];
+  /** Verbo corto por flecha, ej. ["avanzó", "llegó a Turnos"] — longitud steps.length - 1. */
+  transitions: string[];
 }) {
   return (
     <div className="premium-card p-5">
@@ -63,7 +60,7 @@ export function PatientJourneyFunnel({
             {i < steps.length - 1 && (
               <div className="flex flex-col items-center gap-1 text-muted-foreground shrink-0 px-1">
                 <span className="text-xs font-semibold text-foreground text-center whitespace-nowrap">
-                  {transitions[i].percent ? `${transitions[i].percent} ${transitions[i].verb}` : transitions[i].verb}
+                  {transitions[i]}
                 </span>
                 <div className="h-px w-8 bg-border" />
               </div>
