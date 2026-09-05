@@ -51,20 +51,21 @@ export default function ActividadV2() {
   // podía dar porcentajes sin sentido como "296% avanzó".
   const moved = report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
 
-  // "Llegaron a X" = la última columna operativa (por orden real del embudo
-  // en el CRM, ver `funnelStages` / backend `_funnel_stage_candidates`) que
-  // más leads recibió en el período — se muestra como ejemplo representativo
-  // en vez de sumar todos los pipelines, así el nombre siempre es concreto
-  // ("Turno asignado") y no un genérico "estado final" cuando hay más de un
-  // pipeline con nombres de cierre distintos. NO usamos `leadsWon`: marcar
-  // "Ganado" es una acción manual aparte que muchos leads que sí llegaron a
-  // destino nunca reciben.
+  // "Llegaron a X" = el estado que el tenant configuró como resultado del
+  // embudo (`funnelStages` / backend `funnel_outcome_status_ids`), no una
+  // adivinanza automática: ya probamos "por orden de columna" y "el más
+  // popular" y las dos veces terminaba eligiendo una columna de espera que
+  // un mismo lead puede revisitar muchas veces (ej. "Consultando"), no un
+  // destino real. Si el tenant todavía no lo tiene configurado, `reached`
+  // queda en null y ocultamos ese tramo en vez de mostrar un número
+  // inventado. NO usamos `leadsWon`: marcar "Ganado" es una acción manual
+  // aparte que muchos leads que sí llegaron a destino nunca reciben.
   const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
-  const reached = topFinalStage?.final_period_total ?? 0;
-  const finalLabel = topFinalStage?.final_status_name ?? "un estado final";
+  const reached = topFinalStage?.final_period_total ?? null;
+  const finalLabel = topFinalStage?.final_status_name ?? null;
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
@@ -102,8 +103,10 @@ export default function ActividadV2() {
             <div className="space-y-4">
               <p className="text-2xl leading-snug font-semibold">
                 El bot respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
-                y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> pacientes.{" "}
-                <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.
+                y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> pacientes.
+                {finalLabel && reached !== null && (
+                  <> <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.</>
+                )}
               </p>
               {deltaPct !== null && (
                 <div className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", deltaPct >= 0 ? "text-success" : "text-destructive")}>
@@ -153,12 +156,11 @@ export default function ActividadV2() {
           steps={[
             { label: "conversaciones", value: conversations, accent: "accent" },
             { label: "leads avanzaron", value: moved, accent: "info" },
-            { label: `llegaron a ${finalLabel}`, value: reached, accent: "success" },
+            ...(finalLabel && reached !== null
+              ? [{ label: `llegaron a ${finalLabel}`, value: reached, accent: "success" as const }]
+              : []),
           ]}
-          transitions={[
-            { verb: "avanzó", showPercent: false },
-            { verb: `llega a ${finalLabel}` },
-          ]}
+          transitions={finalLabel && reached !== null ? ["avanzó", `llega a ${finalLabel}`] : ["avanzó"]}
         />
       )}
 

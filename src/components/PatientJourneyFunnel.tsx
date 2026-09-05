@@ -1,16 +1,16 @@
 /**
- * PatientJourneyFunnel — "El recorrido de tus pacientes": 3 pasos
- * (conversaciones → leads que avanzaron → llegaron al resultado final).
- * Parte de Actividad v2.
+ * PatientJourneyFunnel — "El recorrido de tus pacientes": 2 o 3 pasos
+ * (conversaciones → leads que avanzaron → [resultado final, si el tenant lo
+ * tiene configurado]). Parte de Actividad v2.
  *
- * Los pasos no viven todos en el mismo espacio de ids: "conversaciones" sale
- * de `chat_messages` (conversation_id) y "leads avanzaron" / el paso final
- * salen de `lead_tracking` (lead_id) — dos sistemas distintos, sin join
- * confiable entre ellos (ver docstring de `_pending_human_reply_count` en el
- * backend). Por eso el % entre esos dos pasos NO es una tasa de conversión
- * real y puede superar el 100% sin que sea un error — directamente no lo
- * mostramos (`showPercent: false`). Entre "leads avanzaron" y el paso final
- * sí vale mostrarlo: ambos salen de `lead_tracking`, mismo id de lead.
+ * Sin porcentajes entre pasos a propósito: cada paso sale de una fuente
+ * distinta (conversaciones de `chat_messages`, leads de `lead_tracking`,
+ * cada uno con su propia forma de contar) y no hay garantía de que un paso
+ * sea subconjunto del anterior, así que cualquier "% de conversión" entre
+ * ellos puede superar el 100% sin ser un error — y de hecho lo hizo, más de
+ * una vez. Mejor mostrar los números tal cual y dejar los porcentajes
+ * confiables para `OutcomeBreakdown`, donde todas las partes salen del mismo
+ * total y sí suman ~100%.
  */
 import { Fragment } from "react";
 import { ArrowRight } from "lucide-react";
@@ -22,32 +22,18 @@ export interface FunnelStep {
   accent: "accent" | "info" | "success";
 }
 
-export interface FunnelTransition {
-  verb: string;
-  /** false cuando los dos pasos no son la misma unidad y un % sería engañoso. */
-  showPercent?: boolean;
-}
-
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
   accent: "bg-accent text-accent-foreground",
   info: "bg-info text-info-foreground",
   success: "bg-success text-success-foreground",
 };
 
-function pct(from: number, to: number): string | null {
-  if (from <= 0) return null;
-  const ratio = (to / from) * 100;
-  if (ratio > 200) return null;
-  if (ratio < 1) return "<1%";
-  return `${Math.round(ratio)}%`;
-}
-
 export function PatientJourneyFunnel({
   steps, transitions,
 }: {
   steps: FunnelStep[];
-  /** longitud steps.length - 1 */
-  transitions: FunnelTransition[];
+  /** Verbo corto por flecha, ej. ["avanzó", "llegó a Turnos"] — longitud steps.length - 1. */
+  transitions: string[];
 }) {
   return (
     <div className="premium-card p-5">
@@ -65,12 +51,7 @@ export function PatientJourneyFunnel({
             {i < steps.length - 1 && (
               <div className="flex flex-col items-center gap-1 text-muted-foreground flex-1 min-w-0 px-1 pt-2">
                 <span className="flex min-h-[32px] items-center justify-center text-xs font-semibold text-foreground text-center leading-tight">
-                  {(() => {
-                    const t = transitions[i];
-                    if (t.showPercent === false) return t.verb;
-                    const p = pct(step.value, steps[i + 1].value);
-                    return p ? `${p} ${t.verb}` : t.verb;
-                  })()}
+                  {transitions[i]}
                 </span>
                 <ArrowRight className="h-4 w-4 shrink-0" />
               </div>
