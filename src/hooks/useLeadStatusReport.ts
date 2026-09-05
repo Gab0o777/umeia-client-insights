@@ -39,15 +39,15 @@ export interface PipelinePeriodStats {
   leads_active: number;
 }
 
-/** Primer y último escalón "operativo" de un pipeline (excluye ganado/perdido,
- * ver `_funnel_stage_candidates` en el backend) y cuántos leads entraron a
- * cada uno en el período — genérico, sin nombres de estado hardcodeados. */
+/** Estado "base" (opcional, `null` hasta que el tenant lo configure) y
+ * estado "final"/outcome (requerido) de un pipeline — ambos configurados
+ * explícitamente por tenant, ver `_funnel_stage_candidates` en el backend. */
 export interface FunnelStage {
   pipeline_id: number;
   pipeline_name: string | null;
-  first_status_id: number;
+  first_status_id: number | null;
   first_status_name: string | null;
-  first_period_total: number;
+  first_period_total: number | null;
   final_status_id: number;
   final_status_name: string | null;
   final_period_total: number;

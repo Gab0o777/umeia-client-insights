@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { PatientJourneyFunnel } from "@/components/PatientJourneyFunnel";
-import { OutcomeBreakdown } from "@/components/OutcomeBreakdown";
+import { OutcomeBreakdown, outcomeSharePct } from "@/components/OutcomeBreakdown";
 import { AttentionNeededCard } from "@/components/AttentionNeededCard";
 import { PipelineDetailPanel } from "@/components/PipelineDetailPanel";
 import { useActivityOverview } from "@/hooks/useActivityOverview";
@@ -38,6 +38,16 @@ function personNoun(vertical: string): string {
   return PERSON_NOUN[vertical] ?? "clientes";
 }
 
+/** % defensivo para pasos que SÍ viven en el mismo sistema (lead_tracking)
+ * pero igual podrían inflarse por reingresos — se oculta si da algo
+ * absurdo en vez de mostrar un número roto. */
+function safePct(from: number, to: number): string | null {
+  if (from <= 0) return null;
+  const ratio = (to / from) * 100;
+  if (ratio > 150) return null;
+  return `${(Math.round(ratio * 10) / 10).toLocaleString("es-AR")}%`;
+}
+
 const TOOLTIP_STYLE = {
   background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))",
   borderRadius: 8, fontSize: 12,
@@ -55,33 +65,41 @@ export default function ActividadV2() {
 
   const noun = personNoun(tenant.vertical);
 
-  // Los 3 números del "recorrido" salen de sistemas distintos y NO hay forma
-  // de unirlos hoy: `chat_messages` (conversaciones) solo tiene
-  // `conversation_id`, `lead_tracking` (leads/embudo) solo tiene `lead_id` —
-  // no existe una columna que los relacione. Ya probamos forzar
-  // "conversaciones" a salir del lado del CRM (`first_period_total`, leads
-  // que se MUEVEN hacia la primera columna) y el resultado fue peor: un lead
-  // nuevo no "se mueve" a su primera columna, nace ahí directamente, así que
-  // ese conteo daba ~0 aunque hubiera actividad real.
-  //
-  // Por eso cada número se muestra con la fuente que SÍ puede medir lo que
-  // dice, y no mostramos ningún % entre "conversaciones" y "leads
-  // avanzaron" — sería comparar peras con manzanas sin importar la fórmula.
-  // "leads avanzaron" → "llegaron a X" sí es 100% CRM (mismo lead_id), pero
-  // igual no le ponemos %: ese mismo dato ya tiene un % confiable y sin
-  // ambigüedad en "¿En qué terminaron las consultas?" (OutcomeBreakdown),
-  // calculado sobre el mismo total para todas las columnas — mostrar OTRO %
-  // acá, con otra base, para el mismo número (251 en ambos lados) es lo que
-  // se veía como "cosas raras" (5,6% acá vs. 4,1% ahí).
-  const conversations = overview.conversationCounts.bot_reply;
-  const moved = report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
+  // "conversaciones" no tiene una fuente CRM confiable en general:
+  // `chat_messages` solo tiene `conversation_id` y `lead_tracking` solo
+  // tiene `lead_id`, no hay columna que las una. PERO cuando el tenant
+  // configura explícitamente su "estado base" (`funnel_base_status_ids` —
+  // ej. Electro Rai: "Consultando", donde cae toda conversación que el bot
+  // atiende), ese conteo SÍ vive en el mismo sistema que el resto del
+  // embudo y podemos usarlo en vez de la cuenta de chat. Sin esa config,
+  // caemos al conteo de conversaciones del chat (aproximado, sin % contra
+  // los pasos siguientes).
+  const pipelinesWithBase = report.funnelStages.filter(f => f.first_period_total !== null);
+  const conversationsAreCrmBased = pipelinesWithBase.length > 0;
 
+  const conversations = conversationsAreCrmBased
+    ? pipelinesWithBase.reduce((sum, f) => sum + (f.first_period_total ?? 0), 0)
+    : overview.conversationCounts.bot_reply;
+
+  const moved = conversationsAreCrmBased
+    ? report.pipelinesPeriodStats
+        .filter(p => pipelinesWithBase.some(f => f.pipeline_id === p.pipeline_id))
+        .reduce((sum, p) => sum + p.leads_active, 0)
+    : report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
+
+  // "llegaron a X" — el estado que el tenant configuró como resultado
+  // (`funnel_outcome_status_ids`), mostrando el que más gente recibió como
+  // ejemplo. Su % NO se calcula acá: reusamos `outcomeSharePct`, la MISMA
+  // fórmula (y el mismo total) que ya muestra "¿En qué terminaron las
+  // consultas?" para esa columna — así los dos widgets nunca pueden mostrar
+  // números distintos para el mismo dato.
   const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
   const finalLabel = topFinalStage?.final_status_name ?? null;
   const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
+  const reachedPct = reached !== null ? outcomeSharePct(report.columns, reached) : null;
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
@@ -177,7 +195,14 @@ export default function ActividadV2() {
               ? [{ label: `llegaron a ${finalLabel}`, value: reached, accent: "success" as const }]
               : []),
           ]}
-          transitions={finalLabel && reached !== null ? ["avanzó", `llega a ${finalLabel}`] : ["avanzó"]}
+          transitions={
+            finalLabel && reached !== null
+              ? [
+                  { verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null },
+                  { verb: `llega a ${finalLabel}`, percent: reachedPct },
+                ]
+              : [{ verb: "avanzó" }]
+          }
         />
       )}
 

@@ -3,13 +3,12 @@
  * su propia mini-card con borde (mismo lenguaje visual que un KpiCard).
  * Parte de Actividad v2.
  *
- * Sin porcentajes entre pasos, a propósito: "conversaciones" sale de
- * `chat_messages` (conversation_id) y "leads avanzaron"/el paso final salen
- * de `lead_tracking` (lead_id) — no hay columna que una esas dos tablas hoy,
- * así que ningún % entre esos pasos puede ser honesto. El % de "en qué
- * terminaron las consultas" SÍ es confiable y vive en `OutcomeBreakdown`
- * (mismo total para todas las partes) — mostrar OTRO % acá, con otra base,
- * para el mismo número, es lo que generaba números contradictorios.
+ * El % es opcional a propósito: el caller (`ActividadV2`) es quien decide si
+ * hay una comparación confiable para mostrar, y con qué fórmula — este
+ * componente no calcula nada, solo muestra el string ya armado. Así evitamos
+ * que el componente invente un % con una base distinta a la que ya se
+ * muestra en otro lado de la página (eso fue justamente el bug: la misma
+ * cifra mostrando 5,6% acá y 4,1% en OutcomeBreakdown).
  */
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
@@ -18,6 +17,12 @@ export interface FunnelStep {
   label: string;
   value: number;
   accent: "accent" | "info" | "success";
+}
+
+export interface FunnelTransition {
+  verb: string;
+  /** Ya formateado (ej. "51,6%"). Omitir cuando no hay una base confiable. */
+  percent?: string | null;
 }
 
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
@@ -37,8 +42,8 @@ export function PatientJourneyFunnel({
 }: {
   title: string;
   steps: FunnelStep[];
-  /** Verbo corto por flecha, ej. ["avanzó", "llegó a Turnos"] — longitud steps.length - 1. */
-  transitions: string[];
+  /** longitud steps.length - 1 */
+  transitions: FunnelTransition[];
 }) {
   return (
     <div className="premium-card p-5">
@@ -60,7 +65,7 @@ export function PatientJourneyFunnel({
             {i < steps.length - 1 && (
               <div className="flex flex-col items-center gap-1 text-muted-foreground shrink-0 px-1">
                 <span className="text-xs font-semibold text-foreground text-center whitespace-nowrap">
-                  {transitions[i]}
+                  {transitions[i].percent ? `${transitions[i].percent} ${transitions[i].verb}` : transitions[i].verb}
                 </span>
                 <div className="h-px w-8 bg-border" />
               </div>

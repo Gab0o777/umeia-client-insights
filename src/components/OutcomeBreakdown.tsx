@@ -27,6 +27,20 @@ function groupByName(columns: LeadStatusColumn[]) {
   return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
+/** Mismo total que usan las barras de abajo — exportado para que otras
+ * vistas (ej. el % de "llegaron a X" en PatientJourneyFunnel) muestren
+ * exactamente el mismo % que este componente para el mismo status, en vez
+ * de una cuenta paralela que puede no coincidir. */
+export function outcomeTotal(columns: LeadStatusColumn[]): number {
+  return columns.reduce((sum, c) => sum + c.period_total, 0);
+}
+
+export function outcomeSharePct(columns: LeadStatusColumn[], value: number): string | null {
+  const total = outcomeTotal(columns);
+  if (total <= 0) return null;
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
 function BreakdownBars({ columns }: { columns: LeadStatusColumn[] }) {
   const rows = useMemo(() => groupByName(columns), [columns]);
   const total = rows.reduce((sum, r) => sum + r.value, 0);
