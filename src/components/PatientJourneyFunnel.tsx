@@ -44,11 +44,11 @@ export function PatientJourneyFunnel({
               <div className="text-xs text-muted-foreground">{step.label}</div>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+              <div className="flex flex-col items-center gap-1 text-muted-foreground min-w-[110px]">
+                <span className="text-xs font-semibold text-foreground text-center leading-snug">
                   {pct(step.value, steps[i + 1].value)} {transitions[i]}
                 </span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </div>
             )}
           </div>

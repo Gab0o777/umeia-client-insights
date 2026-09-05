@@ -44,16 +44,20 @@ export default function ActividadV2() {
   const conversations = overview.conversationCounts.bot_reply;
   const moved = overview.counts.lead_moved_column;
 
-  // "Llegaron a X" = suma de `final_period_total` de la última columna
-  // operativa de cada pipeline (por orden real del embudo en el CRM, ver
-  // `funnelStages` / backend `_funnel_stage_candidates`) — NO usamos
-  // `leadsWon`: marcar "Ganado" es una acción manual aparte que muchos leads
-  // que sí llegaron a destino (ej. "Turno asignado") nunca reciben.
-  const reached = report.funnelStages.reduce((sum, f) => sum + f.final_period_total, 0);
-  const finalStageNames = Array.from(
-    new Set(report.funnelStages.map(f => f.final_status_name).filter((n): n is string => !!n))
+  // "Llegaron a X" = la última columna operativa (por orden real del embudo
+  // en el CRM, ver `funnelStages` / backend `_funnel_stage_candidates`) que
+  // más leads recibió en el período — se muestra como ejemplo representativo
+  // en vez de sumar todos los pipelines, así el nombre siempre es concreto
+  // ("Turno asignado") y no un genérico "estado final" cuando hay más de un
+  // pipeline con nombres de cierre distintos. NO usamos `leadsWon`: marcar
+  // "Ganado" es una acción manual aparte que muchos leads que sí llegaron a
+  // destino nunca reciben.
+  const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
+    (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
+    null
   );
-  const finalLabel = finalStageNames.length === 1 ? finalStageNames[0] : "un estado final";
+  const reached = topFinalStage?.final_period_total ?? 0;
+  const finalLabel = topFinalStage?.final_status_name ?? "un estado final";
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
