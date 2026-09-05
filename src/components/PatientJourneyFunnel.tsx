@@ -1,19 +1,14 @@
 /**
- * PatientJourneyFunnel — "El recorrido de tus pacientes": 2 o 3 pasos
- * (conversaciones → leads que avanzaron → [resultado final, si el tenant lo
- * tiene configurado]). Parte de Actividad v2.
+ * PatientJourneyFunnel — "El recorrido de tus X": 2 o 3 pasos, cada uno en
+ * su propia mini-card con borde (mismo lenguaje visual que un KpiCard).
+ * Parte de Actividad v2.
  *
- * Sin porcentajes entre pasos a propósito: cada paso sale de una fuente
- * distinta (conversaciones de `chat_messages`, leads de `lead_tracking`,
- * cada uno con su propia forma de contar) y no hay garantía de que un paso
- * sea subconjunto del anterior, así que cualquier "% de conversión" entre
- * ellos puede superar el 100% sin ser un error — y de hecho lo hizo, más de
- * una vez. Mejor mostrar los números tal cual y dejar los porcentajes
- * confiables para `OutcomeBreakdown`, donde todas las partes salen del mismo
- * total y sí suman ~100%.
+ * El % entre pasos es opcional a propósito: solo tiene sentido cuando todos
+ * los pasos salen del mismo sistema/unidad (ver `ActividadV2.tsx`, que decide
+ * cuándo calcularlo) — este componente no asume nada, solo muestra lo que le
+ * pasan.
  */
 import { Fragment } from "react";
-import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FunnelStep {
@@ -22,38 +17,55 @@ export interface FunnelStep {
   accent: "accent" | "info" | "success";
 }
 
+export interface FunnelTransition {
+  verb: string;
+  /** Ya formateado, ej. "51,6%". Omitir cuando no es una comparación confiable. */
+  percent?: string | null;
+}
+
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
   accent: "bg-accent text-accent-foreground",
   info: "bg-info text-info-foreground",
   success: "bg-success text-success-foreground",
 };
 
+const VALUE_TEXT: Record<FunnelStep["accent"], string> = {
+  accent: "text-accent",
+  info: "text-info",
+  success: "text-success",
+};
+
 export function PatientJourneyFunnel({
-  steps, transitions,
+  title, steps, transitions,
 }: {
+  title: string;
   steps: FunnelStep[];
-  /** Verbo corto por flecha, ej. ["avanzó", "llegó a Turnos"] — longitud steps.length - 1. */
-  transitions: string[];
+  /** longitud steps.length - 1 */
+  transitions: FunnelTransition[];
 }) {
   return (
     <div className="premium-card p-5">
-      <div className="text-sm font-semibold mb-5">El recorrido de tus pacientes</div>
-      <div className="flex items-start w-full">
+      <div className="text-sm font-semibold mb-5">{title}</div>
+      <div className="flex items-center w-full gap-2">
         {steps.map((step, i) => (
           <Fragment key={step.label}>
-            <div className="flex flex-col items-center gap-1.5 text-center flex-1 min-w-0 px-1">
-              <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold", CIRCLE_BG[step.accent])}>
-                {i + 1}
+            <div className="flex-1 min-w-0 rounded-xl border border-border px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", CIRCLE_BG[step.accent])}>
+                  {i + 1}
+                </div>
+                <div className={cn("text-xl font-bold tracking-tight truncate", VALUE_TEXT[step.accent])}>
+                  {step.value.toLocaleString("es-AR")}
+                </div>
               </div>
-              <div className="text-2xl font-bold tracking-tight">{step.value.toLocaleString("es-AR")}</div>
-              <div className="text-xs text-muted-foreground leading-tight">{step.label}</div>
+              <div className="mt-1 text-xs text-muted-foreground truncate">{step.label}</div>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground flex-1 min-w-0 px-1 pt-2">
-                <span className="flex min-h-[32px] items-center justify-center text-xs font-semibold text-foreground text-center leading-tight">
-                  {transitions[i]}
+              <div className="flex flex-col items-center gap-1 text-muted-foreground shrink-0 px-1">
+                <span className="text-xs font-semibold text-foreground text-center whitespace-nowrap">
+                  {transitions[i].percent ? `${transitions[i].percent} ${transitions[i].verb}` : transitions[i].verb}
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0" />
+                <div className="h-px w-8 bg-border" />
               </div>
             )}
           </Fragment>

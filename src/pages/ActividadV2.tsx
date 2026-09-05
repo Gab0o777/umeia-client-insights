@@ -26,6 +26,27 @@ function daysFor(hours: number): number {
   return 30;
 }
 
+// Cómo llamar a "la gente que le escribe al bot" según el rubro del tenant —
+// no es lo mismo un paciente (clínica) que un cliente (ecommerce) o un
+// alumno (educación). Default genérico para verticales no mapeados.
+const PERSON_NOUN: Record<string, string> = {
+  clinica: "pacientes",
+  ecommerce: "clientes",
+  educacion: "alumnos",
+};
+function personNoun(vertical: string): string {
+  return PERSON_NOUN[vertical] ?? "clientes";
+}
+
+/** Solo se muestra cuando la razón es una comparación confiable (mismo
+ * sistema/unidad en ambos lados) — ver comentario en `ActividadV2`. */
+function pct(from: number, to: number): string | null {
+  if (from <= 0) return null;
+  const ratio = (to / from) * 100;
+  if (ratio > 150) return null;
+  return `${(Math.round(ratio * 10) / 10).toLocaleString("es-AR")}%`;
+}
+
 const TOOLTIP_STYLE = {
   background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))",
   borderRadius: 8, fontSize: 12,
@@ -41,31 +62,43 @@ export default function ActividadV2() {
 
   if (!tenant) return null;
 
-  const conversations = overview.conversationCounts.bot_reply;
+  const noun = personNoun(tenant.vertical);
 
-  // "Leads avanzaron" = leads DISTINTOS que cambiaron de estado en el
-  // período (`pipelinesPeriodStats`, misma tabla que las conversaciones:
-  // 1 lead = 1 fila). NO usamos `overview.counts.lead_moved_column`: ese es
-  // un conteo de EVENTOS de movimiento (un mismo lead puede moverse varias
-  // veces), no de leads — comparado contra "conversaciones" (distintas)
-  // podía dar porcentajes sin sentido como "296% avanzó".
-  const moved = report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
+  // El embudo completo (conversaciones → avanzaron → llegaron a X) solo
+  // puede medirse con porcentajes reales cuando los 3 pasos viven en el
+  // MISMO sistema — "conversaciones" (chat_messages) y "leads avanzaron"
+  // (lead_tracking, TODOS los pipelines) son universos distintos, y sumar
+  // pipelines sin filtrar mete de más leads que nunca tuvieron una
+  // conversación en el período (moves por automatizaciones, otro pipeline
+  // sin relación, etc.) — por eso 3.104 conversaciones podían "avanzar"
+  // 4.494 leads, un número imposible.
+  //
+  // Fix: una vez que el tenant configura un estado final por pipeline
+  // (`funnelStages` / `funnel_outcome_status_ids`), escopeamos LOS 3 PASOS
+  // a esos mismos pipelines y usamos `first_period_total` (leads que
+  // entraron al embudo, mismo `lead_id` que el resto) en vez del conteo de
+  // conversaciones de chat — ahí sí los 3 números miden lo mismo y el % es
+  // real. Sin esa config, degradamos a una aproximación de 2 pasos sin %.
+  const funnelPipelineIds = new Set(report.funnelStages.map(f => f.pipeline_id));
+  const hasFunnelConfig = funnelPipelineIds.size > 0;
 
-  // "Llegaron a X" = el estado que el tenant configuró como resultado del
-  // embudo (`funnelStages` / backend `funnel_outcome_status_ids`), no una
-  // adivinanza automática: ya probamos "por orden de columna" y "el más
-  // popular" y las dos veces terminaba eligiendo una columna de espera que
-  // un mismo lead puede revisitar muchas veces (ej. "Consultando"), no un
-  // destino real. Si el tenant todavía no lo tiene configurado, `reached`
-  // queda en null y ocultamos ese tramo en vez de mostrar un número
-  // inventado. NO usamos `leadsWon`: marcar "Ganado" es una acción manual
-  // aparte que muchos leads que sí llegaron a destino nunca reciben.
   const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
-  const reached = topFinalStage?.final_period_total ?? null;
   const finalLabel = topFinalStage?.final_status_name ?? null;
+
+  const conversations = hasFunnelConfig
+    ? report.funnelStages.reduce((sum, f) => sum + f.first_period_total, 0)
+    : overview.conversationCounts.bot_reply;
+
+  const moved = hasFunnelConfig
+    ? report.pipelinesPeriodStats
+        .filter(p => funnelPipelineIds.has(p.pipeline_id))
+        .reduce((sum, p) => sum + p.leads_active, 0)
+    : report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
+
+  const reached = hasFunnelConfig ? topFinalStage?.final_period_total ?? 0 : null;
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
@@ -103,7 +136,7 @@ export default function ActividadV2() {
             <div className="space-y-4">
               <p className="text-2xl leading-snug font-semibold">
                 El bot respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
-                y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> pacientes.
+                y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> {noun}.
                 {finalLabel && reached !== null && (
                   <> <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.</>
                 )}
@@ -153,6 +186,7 @@ export default function ActividadV2() {
         <ChartSkeleton height={140} />
       ) : (
         <PatientJourneyFunnel
+          title={`El recorrido de tus ${noun}`}
           steps={[
             { label: "conversaciones", value: conversations, accent: "accent" },
             { label: "leads avanzaron", value: moved, accent: "info" },
@@ -160,7 +194,17 @@ export default function ActividadV2() {
               ? [{ label: `llegaron a ${finalLabel}`, value: reached, accent: "success" as const }]
               : []),
           ]}
-          transitions={finalLabel && reached !== null ? ["avanzó", `llega a ${finalLabel}`] : ["avanzó"]}
+          transitions={
+            // Solo hay % (real) cuando hasFunnelConfig es true — es la única
+            // rama donde `finalLabel`/`reached` están seteados, así que acá
+            // los 3 números ya están escopeados al mismo sistema.
+            finalLabel && reached !== null
+              ? [
+                  { verb: "avanzó", percent: pct(conversations, moved) },
+                  { verb: `llega a ${finalLabel}`, percent: pct(moved, reached) },
+                ]
+              : [{ verb: "avanzó" }]
+          }
         />
       )}
 
