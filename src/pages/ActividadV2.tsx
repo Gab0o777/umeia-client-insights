@@ -7,6 +7,7 @@ import { PipelineDetailPanel } from "@/components/PipelineDetailPanel";
 import { RecommendationsCard } from "@/components/RecommendationsCard";
 import { useActivityOverview } from "@/hooks/useActivityOverview";
 import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
+import { useMenuReport } from "@/hooks/useMenuReport";
 import { ChartSkeleton } from "@/components/Skeleton";
 import { cn } from "@/lib/utils";
 import { getBrandName } from "@/lib/whitelabel";
@@ -46,6 +47,7 @@ export default function ActividadV2() {
 
   const overview = useActivityOverview(tenant?.apiSlug, hours);
   const report = useLeadStatusReport(tenant?.apiSlug, hours);
+  const menuReport = useMenuReport(tenant?.apiSlug, hours);
 
   if (!tenant) return null;
 
@@ -175,6 +177,16 @@ export default function ActividadV2() {
               : [{ verb: "avanzó" }]
           }
         />
+      )}
+
+      {/* Contexto: no todo lo que "no avanzó" quedó sin resolver — una FAQ
+          (envíos, pagos, horarios) es una consulta ya cerrada que nunca
+          necesitó mover al lead. */}
+      {!menuReport.loading && menuReport.connected && (menuReport.informational ?? 0) > 0 && (
+        <p className="text-xs text-muted-foreground px-1">
+          De las respuestas de {brandName} en este período, <span className="font-medium text-foreground">{menuReport.informational?.toLocaleString("es-AR")}</span> fueron
+          consultas informativas (envíos, pagos, garantía, horarios, etc.) — conversaciones ya resueltas que no necesitan mover al lead de columna.
+        </p>
       )}
 
       {/* ── En qué terminaron + necesita tu atención ── */}
