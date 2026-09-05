@@ -36,7 +36,7 @@ function personNoun(vertical: string): string {
 function safePct(from: number, to: number): string | null {
   if (from <= 0) return null;
   const ratio = (to / from) * 100;
-  if (ratio > 150) return null;
+  if (ratio > 100) return null;
   return `${(Math.round(ratio * 10) / 10).toLocaleString("es-AR")}%`;
 }
 
@@ -71,10 +71,14 @@ export default function ActividadV2() {
     ? pipelinesWithBase.reduce((sum, f) => sum + (f.first_period_total ?? 0), 0)
     : overview.conversationCounts.bot_reply;
 
+  // "leads avanzaron": cuando hay base configurada, usamos
+  // `advanced_period_total` (leads que YA NO están en la columna base) en
+  // vez de `leads_active` (cualquier lead tocado, incluye reingresos a la
+  // propia base) — comparar "conversaciones" contra leads_active daba
+  // porcentajes como "145% avanzó" porque leads_active suma actividad que
+  // nunca salió de "Consultando".
   const moved = conversationsAreCrmBased
-    ? report.pipelinesPeriodStats
-        .filter(p => pipelinesWithBase.some(f => f.pipeline_id === p.pipeline_id))
-        .reduce((sum, p) => sum + p.leads_active, 0)
+    ? pipelinesWithBase.reduce((sum, f) => sum + (f.advanced_period_total ?? 0), 0)
     : report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
 
   // "llegaron a X" — el estado que el tenant configuró como resultado

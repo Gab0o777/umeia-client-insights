@@ -48,6 +48,11 @@ export interface FunnelStage {
   first_status_id: number | null;
   first_status_name: string | null;
   first_period_total: number | null;
+  /** Leads distintos que se movieron y YA NO están en la columna base — a
+   * diferencia de `pipelinesPeriodStats[].leads_active` (cualquier lead
+   * tocado, incluye reingresos a la propia columna base), este es el
+   * numerador correcto para comparar contra `first_period_total`. */
+  advanced_period_total: number | null;
   final_status_id: number;
   final_status_name: string | null;
   final_period_total: number;

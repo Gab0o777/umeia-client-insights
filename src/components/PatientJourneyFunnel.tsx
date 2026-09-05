@@ -11,6 +11,7 @@
  * cifra mostrando 5,6% acá y 4,1% en OutcomeBreakdown).
  */
 import { Fragment } from "react";
+import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FunnelStep {
@@ -63,11 +64,17 @@ export function PatientJourneyFunnel({
               <div className="mt-1 text-xs text-muted-foreground truncate">{step.label}</div>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground shrink-0 px-1">
-                <span className="text-xs font-semibold text-foreground text-center whitespace-nowrap">
-                  {transitions[i].percent ? `${transitions[i].percent} ${transitions[i].verb}` : transitions[i].verb}
-                </span>
-                <div className="h-px w-8 bg-border" />
+              <div className="flex items-center shrink-0">
+                <div className="h-px w-3 bg-border" />
+                <ArrowRight className="h-3 w-3 text-muted-foreground/60 -mx-0.5" />
+                <div className="flex flex-col items-center gap-0.5 rounded-xl border border-border px-3 py-2">
+                  {transitions[i].percent && (
+                    <span className="text-sm font-bold text-foreground whitespace-nowrap">{transitions[i].percent}</span>
+                  )}
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">{transitions[i].verb}</span>
+                </div>
+                <ArrowRight className="h-3 w-3 text-muted-foreground/60 -mx-0.5" />
+                <div className="h-px w-3 bg-border" />
               </div>
             )}
           </Fragment>
