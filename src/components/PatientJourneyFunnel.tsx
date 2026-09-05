@@ -3,14 +3,16 @@
  * (conversaciones → leads que avanzaron → llegaron al resultado final).
  * Parte de Actividad v2.
  *
- * Los 3 pasos miden cosas de naturaleza distinta (conversaciones, leads,
- * entradas a un estado), así que el % entre pasos es una referencia, no una
- * tasa de conversión estricta — puede superar el 100% si, por ejemplo,
- * varios leads sin conversación (creados a mano en el CRM) avanzaron en el
- * período. `pct()` lo formatea de forma legible y oculta el número (dejando
- * solo la flecha + el verbo) cuando está tan distorsionado que mostrarlo
- * confundiría más de lo que aclara.
+ * Los pasos no viven todos en el mismo espacio de ids: "conversaciones" sale
+ * de `chat_messages` (conversation_id) y "leads avanzaron" / el paso final
+ * salen de `lead_tracking` (lead_id) — dos sistemas distintos, sin join
+ * confiable entre ellos (ver docstring de `_pending_human_reply_count` en el
+ * backend). Por eso el % entre esos dos pasos NO es una tasa de conversión
+ * real y puede superar el 100% sin que sea un error — directamente no lo
+ * mostramos (`showPercent: false`). Entre "leads avanzaron" y el paso final
+ * sí vale mostrarlo: ambos salen de `lead_tracking`, mismo id de lead.
  */
+import { Fragment } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +20,12 @@ export interface FunnelStep {
   label: string;
   value: number;
   accent: "accent" | "info" | "success";
+}
+
+export interface FunnelTransition {
+  verb: string;
+  /** false cuando los dos pasos no son la misma unidad y un % sería engañoso. */
+  showPercent?: boolean;
 }
 
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
@@ -38,34 +46,36 @@ export function PatientJourneyFunnel({
   steps, transitions,
 }: {
   steps: FunnelStep[];
-  /** Verbo corto para cada flecha, ej. ["avanzó", "llegó a Turnos"] — longitud steps.length - 1. */
-  transitions: string[];
+  /** longitud steps.length - 1 */
+  transitions: FunnelTransition[];
 }) {
   return (
     <div className="premium-card p-5">
       <div className="text-sm font-semibold mb-5">El recorrido de tus pacientes</div>
-      <div className="flex items-start gap-2 overflow-x-auto pb-1">
+      <div className="flex items-start w-full">
         {steps.map((step, i) => (
-          <div key={step.label} className="flex items-start shrink-0">
-            <div className="flex flex-col items-center gap-1.5 text-center w-[120px] shrink-0">
-              <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", CIRCLE_BG[step.accent])}>
+          <Fragment key={step.label}>
+            <div className="flex flex-col items-center gap-1.5 text-center flex-1 min-w-0 px-1">
+              <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold", CIRCLE_BG[step.accent])}>
                 {i + 1}
               </div>
-              <div className="text-xl font-bold tracking-tight">{step.value.toLocaleString("es-AR")}</div>
-              <div className="text-xs text-muted-foreground leading-tight px-1">{step.label}</div>
+              <div className="text-2xl font-bold tracking-tight">{step.value.toLocaleString("es-AR")}</div>
+              <div className="text-xs text-muted-foreground leading-tight">{step.label}</div>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground w-[130px] shrink-0 pt-1.5">
-                <span className="flex min-h-[32px] items-center justify-center text-xs font-semibold text-foreground text-center leading-tight px-1">
+              <div className="flex flex-col items-center gap-1 text-muted-foreground flex-1 min-w-0 px-1 pt-2">
+                <span className="flex min-h-[32px] items-center justify-center text-xs font-semibold text-foreground text-center leading-tight">
                   {(() => {
+                    const t = transitions[i];
+                    if (t.showPercent === false) return t.verb;
                     const p = pct(step.value, steps[i + 1].value);
-                    return p ? `${p} ${transitions[i]}` : transitions[i];
+                    return p ? `${p} ${t.verb}` : t.verb;
                   })()}
                 </span>
                 <ArrowRight className="h-4 w-4 shrink-0" />
               </div>
             )}
-          </div>
+          </Fragment>
         ))}
       </div>
     </div>

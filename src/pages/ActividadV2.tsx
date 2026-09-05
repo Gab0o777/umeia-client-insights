@@ -99,14 +99,14 @@ export default function ActividadV2() {
           {overview.loading ? (
             <ChartSkeleton height={140} />
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm leading-relaxed">
+            <div className="space-y-4">
+              <p className="text-2xl leading-snug font-semibold">
                 El bot respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
                 y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> pacientes.{" "}
                 <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.
               </p>
               {deltaPct !== null && (
-                <div className={cn("inline-flex items-center gap-1 text-xs font-semibold", deltaPct >= 0 ? "text-success" : "text-destructive")}>
+                <div className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", deltaPct >= 0 ? "text-success" : "text-destructive")}>
                   <span>{deltaPct >= 0 ? "▲" : "▼"}</span>
                   <span>{Math.abs(deltaPct)}% {deltaPct >= 0 ? "más" : "menos"} actividad que el período anterior</span>
                 </div>
@@ -155,7 +155,10 @@ export default function ActividadV2() {
             { label: "leads avanzaron", value: moved, accent: "info" },
             { label: `llegaron a ${finalLabel}`, value: reached, accent: "success" },
           ]}
-          transitions={["avanzó", `llega a ${finalLabel}`]}
+          transitions={[
+            { verb: "avanzó", showPercent: false },
+            { verb: `llega a ${finalLabel}` },
+          ]}
         />
       )}
 
