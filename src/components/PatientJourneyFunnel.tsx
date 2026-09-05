@@ -11,7 +11,7 @@
  * cifra mostrando 5,6% acá y 4,1% en OutcomeBreakdown).
  */
 import { Fragment } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CornerDownRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FunnelStep {
@@ -23,6 +23,13 @@ export interface FunnelStep {
 export interface FunnelTransition {
   verb: string;
   /** Ya formateado (ej. "51,6%"). Omitir cuando no hay una base confiable. */
+  percent?: string | null;
+}
+
+export interface FunnelBranch {
+  value: number;
+  label: string;
+  /** Ya formateado. Omitir cuando no hay una base confiable. */
   percent?: string | null;
 }
 
@@ -39,12 +46,18 @@ const VALUE_TEXT: Record<FunnelStep["accent"], string> = {
 };
 
 export function PatientJourneyFunnel({
-  title, steps, transitions,
+  title, steps, transitions, branch,
 }: {
   title: string;
   steps: FunnelStep[];
   /** longitud steps.length - 1 */
   transitions: FunnelTransition[];
+  /** Bifurcación opcional que sale del primer paso — para conversaciones
+   * que terminaron en un resultado distinto del "avanzó" principal (ej.
+   * consultas de FAQ resueltas sin mover al lead), así el hueco entre el %
+   * que avanzó y el 100% queda explicado en vez de mostrarse como si nada
+   * hubiera pasado con esas conversaciones. */
+  branch?: FunnelBranch | null;
 }) {
   return (
     <div className="premium-card p-5">
@@ -80,6 +93,25 @@ export function PatientJourneyFunnel({
           </Fragment>
         ))}
       </div>
+
+      {branch && (
+        <div className="flex items-start gap-2 mt-3">
+          <CornerDownRight className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-2.5" />
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-center gap-0.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 shrink-0">
+              {branch.percent && (
+                <span className="text-xs font-bold text-foreground whitespace-nowrap">{branch.percent}</span>
+              )}
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">no necesitó avanzar</span>
+            </div>
+            <ArrowRight className="h-3 w-3 text-muted-foreground/60 -mx-1" />
+            <div className="rounded-xl border border-dashed border-border px-3 py-2">
+              <div className="text-lg font-bold text-muted-foreground">{branch.value.toLocaleString("es-AR")}</div>
+              <div className="text-[11px] text-muted-foreground whitespace-nowrap">{branch.label}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

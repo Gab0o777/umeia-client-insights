@@ -97,6 +97,17 @@ export default function ActividadV2() {
   const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
   const reachedPct = reached !== null ? outcomeSharePct(report.columns, reached) : null;
 
+  // Bifurcación del funnel: parte de las conversaciones que "no avanzaron"
+  // en realidad ya está resuelta — una FAQ (envíos, pagos, garantía,
+  // horarios) es una consulta cerrada que nunca iba a mover al lead de
+  // columna, no una que quedó sin responder. Mostrarla como una rama del
+  // funnel (en vez de una leyenda aparte) explica el hueco entre el % que
+  // avanzó y el 100% en vez de dejarlo como un misterio.
+  const informationalCount = menuReport.connected ? menuReport.informational ?? 0 : 0;
+  const funnelBranch = informationalCount > 0
+    ? { value: informationalCount, label: "consultas resueltas (FAQ)", percent: safePct(conversations, informationalCount) }
+    : null;
+
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
     : null;
@@ -176,17 +187,8 @@ export default function ActividadV2() {
                 ]
               : [{ verb: "avanzó" }]
           }
+          branch={funnelBranch}
         />
-      )}
-
-      {/* Contexto: no todo lo que "no avanzó" quedó sin resolver — una FAQ
-          (envíos, pagos, horarios) es una consulta ya cerrada que nunca
-          necesitó mover al lead. */}
-      {!menuReport.loading && menuReport.connected && (menuReport.informational ?? 0) > 0 && (
-        <p className="text-xs text-muted-foreground px-1">
-          De las respuestas de {brandName} en este período, <span className="font-medium text-foreground">{menuReport.informational?.toLocaleString("es-AR")}</span> fueron
-          consultas informativas (envíos, pagos, garantía, horarios, etc.) — conversaciones ya resueltas que no necesitan mover al lead de columna.
-        </p>
       )}
 
       {/* ── En qué terminaron + necesita tu atención ── */}
