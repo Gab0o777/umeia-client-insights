@@ -1,8 +1,12 @@
 /**
- * useLeadStatusReport — trae `/api/metrics/lead-status-report`: cuántos leads
- * abiertos hay parados en cada columna del pipeline del CRM, más `leads_won`
- * (leads ganados dentro de `hours`, el único campo de este endpoint que
- * respeta la ventana de tiempo — el resto es una foto siempre actual).
+ * useLeadStatusReport — trae `/api/metrics/lead-status-report`.
+ *
+ * `columns[].total` / `totalOpen` son una FOTO ACTUAL (leads abiertos parados
+ * ahí ahora mismo) — no respetan `hours`. `leadsWon` y
+ * `pipelinesPeriodStats[].leads_active` sí respetan `hours`: son los leads
+ * ganados / con cambio de estado dentro de esa ventana. Por eso el snapshot
+ * puede no coincidir con lo que muestra el CRM filtrado por fecha — son
+ * números distintos por diseño, no un bug.
  */
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -13,6 +17,9 @@ export interface LeadStatusColumn {
   pipeline_id: number;
   status_name: string | null;
   total: number;
+  /** Leads that entered this status within `hours` — unlike `total` (a
+   * current snapshot), this respects the date filter. */
+  period_total: number;
   ranges: Record<string, number>;
   oldest_days: number | null;
 }
@@ -27,32 +34,55 @@ export interface PipelineInfo {
   pipeline_name: string | null;
 }
 
+export interface PipelinePeriodStats {
+  pipeline_id: number;
+  leads_active: number;
+}
+
+/** Primer y último escalón "operativo" de un pipeline (excluye ganado/perdido,
+ * ver `_funnel_stage_candidates` en el backend) y cuántos leads entraron a
+ * cada uno en el período — genérico, sin nombres de estado hardcodeados. */
+export interface FunnelStage {
+  pipeline_id: number;
+  pipeline_name: string | null;
+  first_status_id: number;
+  first_status_name: string | null;
+  first_period_total: number;
+  final_status_id: number;
+  final_status_name: string | null;
+  final_period_total: number;
+}
+
 interface LeadStatusReportResp {
   total_open: number;
   range_labels: string[];
   statuses: LeadStatusColumn[];
   pipelines: PipelineInfo[];
+  pipelines_period_stats: PipelinePeriodStats[];
+  funnel_stages: FunnelStage[];
   crm: CrmInfo | null;
   leads_won: number;
   human_handoff: { status_ids: number[]; pending_reply: number };
 }
 
 export interface LeadStatusReport {
-  totalOpen:        number | null;
-  columns:          LeadStatusColumn[];
-  rangeLabels:      string[];
-  pipelines:        PipelineInfo[];
-  crm:              CrmInfo | null;
-  leadsWon:         number | null;
-  pendingReply:     number | null;
-  hasHandoff:       boolean;
-  handoffStatusIds: number[];
-  loading:          boolean;
+  totalOpen:            number | null;
+  columns:              LeadStatusColumn[];
+  rangeLabels:          string[];
+  pipelines:            PipelineInfo[];
+  pipelinesPeriodStats: PipelinePeriodStats[];
+  funnelStages:         FunnelStage[];
+  crm:                  CrmInfo | null;
+  leadsWon:             number | null;
+  pendingReply:         number | null;
+  hasHandoff:           boolean;
+  handoffStatusIds:     number[];
+  loading:              boolean;
 }
 
 const EMPTY: LeadStatusReport = {
-  totalOpen: null, columns: [], rangeLabels: [], pipelines: [], crm: null, leadsWon: null, pendingReply: null,
-  hasHandoff: false, handoffStatusIds: [], loading: true,
+  totalOpen: null, columns: [], rangeLabels: [], pipelines: [], pipelinesPeriodStats: [], funnelStages: [], crm: null,
+  leadsWon: null, pendingReply: null, hasHandoff: false, handoffStatusIds: [], loading: true,
 };
 
 export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): LeadStatusReport {
@@ -74,16 +104,18 @@ export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): L
       .then(data => {
         if (cancelled || !data) return;
         setS({
-          totalOpen:        data.total_open,
-          columns:          data.statuses,
-          rangeLabels:      data.range_labels ?? [],
-          pipelines:        data.pipelines ?? [],
-          crm:              data.crm,
-          leadsWon:         data.leads_won ?? null,
-          pendingReply:     data.human_handoff?.pending_reply ?? null,
-          hasHandoff:       (data.human_handoff?.status_ids?.length ?? 0) > 0,
-          handoffStatusIds: data.human_handoff?.status_ids ?? [],
-          loading:          false,
+          totalOpen:            data.total_open,
+          columns:              data.statuses,
+          rangeLabels:          data.range_labels ?? [],
+          pipelines:            data.pipelines ?? [],
+          pipelinesPeriodStats: data.pipelines_period_stats ?? [],
+          funnelStages:         data.funnel_stages ?? [],
+          crm:                  data.crm,
+          leadsWon:             data.leads_won ?? null,
+          pendingReply:         data.human_handoff?.pending_reply ?? null,
+          hasHandoff:           (data.human_handoff?.status_ids?.length ?? 0) > 0,
+          handoffStatusIds:     data.human_handoff?.status_ids ?? [],
+          loading:              false,
         });
       })
       .catch(() => {
