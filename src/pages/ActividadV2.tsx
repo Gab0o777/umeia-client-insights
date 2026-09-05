@@ -4,14 +4,12 @@ import { PatientJourneyFunnel } from "@/components/PatientJourneyFunnel";
 import { OutcomeBreakdown, outcomeSharePct } from "@/components/OutcomeBreakdown";
 import { AttentionNeededCard } from "@/components/AttentionNeededCard";
 import { PipelineDetailPanel } from "@/components/PipelineDetailPanel";
+import { RecommendationsCard } from "@/components/RecommendationsCard";
 import { useActivityOverview } from "@/hooks/useActivityOverview";
 import { useLeadStatusReport } from "@/hooks/useLeadStatusReport";
-import { useRealMetrics } from "@/hooks/useRealMetrics";
 import { ChartSkeleton } from "@/components/Skeleton";
 import { cn } from "@/lib/utils";
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-} from "recharts";
+import { getBrandName } from "@/lib/whitelabel";
 import { useState } from "react";
 
 const TIME_RANGES = [
@@ -19,12 +17,6 @@ const TIME_RANGES = [
   { label: "24h", hours: 24  }, { label: "7d",  hours: 168 },
   { label: "30d", hours: 720 },
 ];
-
-function daysFor(hours: number): number {
-  if (hours <= 24) return 1;
-  if (hours <= 168) return 7;
-  return 30;
-}
 
 // Cómo llamar a "la gente que le escribe al bot" según el rubro del tenant —
 // no es lo mismo un paciente (clínica) que un cliente (ecommerce) o un
@@ -48,22 +40,20 @@ function safePct(from: number, to: number): string | null {
   return `${(Math.round(ratio * 10) / 10).toLocaleString("es-AR")}%`;
 }
 
-const TOOLTIP_STYLE = {
-  background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))",
-  borderRadius: 8, fontSize: 12,
-};
-
 export default function ActividadV2() {
   const { tenant } = useAuth();
   const [hours, setHours] = useState(168);
 
   const overview = useActivityOverview(tenant?.apiSlug, hours);
   const report = useLeadStatusReport(tenant?.apiSlug, hours);
-  const real = useRealMetrics(tenant?.apiSlug, hours, daysFor(hours));
 
   if (!tenant) return null;
 
   const noun = personNoun(tenant.vertical);
+  // "El bot respondió..." → "{marca} respondió...": la marca depende del
+  // dominio desde el que se accede (ver src/lib/whitelabel.ts), no siempre
+  // es "UMEIA" (ej. metodoclinico.com se muestra como "Metodo Clinico").
+  const brandName = getBrandName();
 
   // "conversaciones" no tiene una fuente CRM confiable en general:
   // `chat_messages` solo tiene `conversation_id` y `lead_tracking` solo
@@ -105,8 +95,6 @@ export default function ActividadV2() {
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
     : null;
 
-  const dailyData = real.messagesByDay.map(d => ({ day: d.day, total: d.auto + d.human }));
-
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -136,7 +124,7 @@ export default function ActividadV2() {
           ) : (
             <div className="space-y-4">
               <p className="text-2xl leading-snug font-semibold">
-                El bot respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
+                {brandName} respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
                 y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> {noun}.
                 {finalLabel && reached !== null && (
                   <> <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.</>
@@ -152,34 +140,13 @@ export default function ActividadV2() {
           )}
         </div>
 
-        <div className="premium-card p-5 lg:col-span-3">
-          <div className="text-sm font-semibold mb-4">Actividad diaria</div>
-          {real.messagesByDayLoading ? (
+        {overview.loading || report.loading ? (
+          <div className="premium-card p-5 lg:col-span-3">
             <ChartSkeleton height={200} />
-          ) : dailyData.length > 0 ? (
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dailyData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Area type="monotone" dataKey="total" name="Actividad" stroke="hsl(var(--accent))" strokeWidth={2} fill="url(#activityFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center">
-              <p className="text-xs text-muted-foreground">Sin datos en el período</p>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <RecommendationsCard report={report} overview={overview} deltaPct={deltaPct} noun={noun} brandName={brandName} />
+        )}
       </div>
 
       {/* ── Recorrido de pacientes ── */}
