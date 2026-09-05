@@ -42,7 +42,14 @@ export default function ActividadV2() {
   if (!tenant) return null;
 
   const conversations = overview.conversationCounts.bot_reply;
-  const moved = overview.counts.lead_moved_column;
+
+  // "Leads avanzaron" = leads DISTINTOS que cambiaron de estado en el
+  // período (`pipelinesPeriodStats`, misma tabla que las conversaciones:
+  // 1 lead = 1 fila). NO usamos `overview.counts.lead_moved_column`: ese es
+  // un conteo de EVENTOS de movimiento (un mismo lead puede moverse varias
+  // veces), no de leads — comparado contra "conversaciones" (distintas)
+  // podía dar porcentajes sin sentido como "296% avanzó".
+  const moved = report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
 
   // "Llegaron a X" = la última columna operativa (por orden real del embudo
   // en el CRM, ver `funnelStages` / backend `_funnel_stage_candidates`) que
