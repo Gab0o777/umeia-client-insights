@@ -128,14 +128,18 @@ export default function ActividadV2() {
   // resuelta por el menú guiado del bot es una consulta cerrada, pero viene
   // de `chat_messages`/menú, sin `lead_id` — no hay forma de confirmar que
   // sea un subconjunto de "conversaciones", por eso no se dibuja como parte
-  // del mismo embudo (ver docstring de PatientJourneyFunnel).
+  // del mismo embudo (ver docstring de PatientJourneyFunnel). Tampoco es
+  // excluyente con "avanzó": una misma conversación puede recibir una
+  // respuesta de FAQ (ej. horario) Y MÁS TARDE avanzar/comprar — no son dos
+  // mitades de la misma torta, por eso el hint lo aclara explícitamente en
+  // vez de dejar que el lector asuma que son categorías separadas.
   const informationalCount = menuReport.connected ? menuReport.informational ?? 0 : 0;
   const funnelNote = informationalCount > 0
     ? {
         value: informationalCount,
         label: "consultas resueltas por FAQ",
         percent: safePct(conversations, informationalCount),
-        hint: "otro canal, aparte de este embudo",
+        hint: "no excluye haber avanzado: un cliente puede preguntar el horario y después comprar",
       }
     : null;
 
