@@ -67,7 +67,7 @@ interface LeadStatusReportResp {
   funnel_stages: FunnelStage[];
   crm: CrmInfo | null;
   leads_won: number;
-  human_handoff: { status_ids: number[]; pending_reply: number };
+  human_handoff: { status_ids: number[]; pending_reply: number; period_total: number };
 }
 
 export interface LeadStatusReport {
@@ -82,12 +82,13 @@ export interface LeadStatusReport {
   pendingReply:         number | null;
   hasHandoff:           boolean;
   handoffStatusIds:     number[];
+  handoffPeriodTotal:   number;
   loading:              boolean;
 }
 
 const EMPTY: LeadStatusReport = {
   totalOpen: null, columns: [], rangeLabels: [], pipelines: [], pipelinesPeriodStats: [], funnelStages: [], crm: null,
-  leadsWon: null, pendingReply: null, hasHandoff: false, handoffStatusIds: [], loading: true,
+  leadsWon: null, pendingReply: null, hasHandoff: false, handoffStatusIds: [], handoffPeriodTotal: 0, loading: true,
 };
 
 export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): LeadStatusReport {
@@ -120,6 +121,7 @@ export function useLeadStatusReport(apiSlug: string | undefined, hours = 720): L
           pendingReply:         data.human_handoff?.pending_reply ?? null,
           hasHandoff:           (data.human_handoff?.status_ids?.length ?? 0) > 0,
           handoffStatusIds:     data.human_handoff?.status_ids ?? [],
+          handoffPeriodTotal:   data.human_handoff?.period_total ?? 0,
           loading:              false,
         });
       })

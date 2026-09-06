@@ -1,17 +1,19 @@
 /**
- * PatientJourneyFunnel — "El recorrido de tus X": 2 o 3 pasos, cada uno en
- * su propia mini-card con borde (mismo lenguaje visual que un KpiCard).
- * Parte de Actividad v2.
+ * PatientJourneyFunnel — "El recorrido de tus X": pasos secuenciales del
+ * mismo embudo (misma fuente, mismo lead_id) en mini-cards, más 0..n ramas
+ * de detalle que cuelgan del primer paso. Parte de Actividad v2.
  *
- * El % es opcional a propósito: el caller (`ActividadV2`) es quien decide si
- * hay una comparación confiable para mostrar, y con qué fórmula — este
- * componente no calcula nada, solo muestra el string ya armado. Así evitamos
- * que el componente invente un % con una base distinta a la que ya se
- * muestra en otro lado de la página (eso fue justamente el bug: la misma
- * cifra mostrando 5,6% acá y 4,1% en OutcomeBreakdown).
+ * Todos los `steps` y `branches` deben salir de la MISMA población (mismo
+ * lead_id) para que las cuentas cierren — es al caller (`ActividadV2`) a
+ * quien le toca garantizar eso, este componente solo dibuja lo que le
+ * pasan y no calcula ningún %. Un dato de OTRA fuente (ej. el log del menú
+ * guiado del bot, sin lead_id) va en `note`, no en `branches` — mezclarlo
+ * como rama fue justamente el bug: dos porcentajes ("avanzó" y "no
+ * necesitó avanzar") que sumaban más de 100% porque venían de sistemas
+ * distintos disfrazados de partes de la misma torta.
  */
 import { Fragment } from "react";
-import { ArrowRight, CornerDownRight } from "lucide-react";
+import { ArrowRight, CornerDownRight, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FunnelStep {
@@ -31,6 +33,18 @@ export interface FunnelBranch {
   label: string;
   /** Ya formateado. Omitir cuando no hay una base confiable. */
   percent?: string | null;
+  /** Qué es la base del %, ej. "de tus conversaciones" / "de los que
+   * avanzaron" — necesario porque las ramas pueden tener bases distintas
+   * entre sí (ver docstring). */
+  percentBasis: string;
+}
+
+export interface FunnelNote {
+  value: number;
+  label: string;
+  percent?: string | null;
+  /** Por qué esto NO es una rama del embudo de arriba. */
+  hint: string;
 }
 
 const CIRCLE_BG: Record<FunnelStep["accent"], string> = {
@@ -46,18 +60,14 @@ const VALUE_TEXT: Record<FunnelStep["accent"], string> = {
 };
 
 export function PatientJourneyFunnel({
-  title, steps, transitions, branch,
+  title, steps, transitions, branches, note,
 }: {
   title: string;
   steps: FunnelStep[];
   /** longitud steps.length - 1 */
   transitions: FunnelTransition[];
-  /** Bifurcación opcional que sale del primer paso — para conversaciones
-   * que terminaron en un resultado distinto del "avanzó" principal (ej.
-   * consultas de FAQ resueltas sin mover al lead), así el hueco entre el %
-   * que avanzó y el 100% queda explicado en vez de mostrarse como si nada
-   * hubiera pasado con esas conversaciones. */
-  branch?: FunnelBranch | null;
+  branches?: FunnelBranch[];
+  note?: FunnelNote | null;
 }) {
   return (
     <div className="premium-card p-5">
@@ -94,22 +104,36 @@ export function PatientJourneyFunnel({
         ))}
       </div>
 
-      {branch && (
-        <div className="flex items-start gap-2 mt-3">
-          <CornerDownRight className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-2.5" />
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col items-center gap-0.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 shrink-0">
-              {branch.percent && (
-                <span className="text-xs font-bold text-foreground whitespace-nowrap">{branch.percent}</span>
-              )}
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap">no necesitó avanzar</span>
+      {branches && branches.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {branches.map(branch => (
+            <div key={branch.label} className="flex items-start gap-2">
+              <CornerDownRight className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-2.5" />
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center gap-0.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 shrink-0">
+                  {branch.percent && (
+                    <span className="text-xs font-bold text-foreground whitespace-nowrap">{branch.percent}</span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">{branch.percentBasis}</span>
+                </div>
+                <ArrowRight className="h-3 w-3 text-muted-foreground/60 -mx-1" />
+                <div className="rounded-xl border border-dashed border-border px-3 py-2">
+                  <div className="text-lg font-bold text-muted-foreground">{branch.value.toLocaleString("es-AR")}</div>
+                  <div className="text-[11px] text-muted-foreground whitespace-nowrap">{branch.label}</div>
+                </div>
+              </div>
             </div>
-            <ArrowRight className="h-3 w-3 text-muted-foreground/60 -mx-1" />
-            <div className="rounded-xl border border-dashed border-border px-3 py-2">
-              <div className="text-lg font-bold text-muted-foreground">{branch.value.toLocaleString("es-AR")}</div>
-              <div className="text-[11px] text-muted-foreground whitespace-nowrap">{branch.label}</div>
-            </div>
-          </div>
+          ))}
+        </div>
+      )}
+
+      {note && (
+        <div className="mt-4 pt-3 border-t border-border/60 flex items-start gap-2 text-xs text-muted-foreground">
+          <HelpCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            Además, <span className="font-semibold text-foreground">{note.value.toLocaleString("es-AR")}</span> {note.label}
+            {note.percent && <> ({note.percent})</>} — {note.hint}
+          </span>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { PatientJourneyFunnel } from "@/components/PatientJourneyFunnel";
-import { OutcomeBreakdown, outcomeSharePct } from "@/components/OutcomeBreakdown";
+import { OutcomeBreakdown } from "@/components/OutcomeBreakdown";
 import { AttentionNeededCard } from "@/components/AttentionNeededCard";
 import { PipelineDetailPanel } from "@/components/PipelineDetailPanel";
 import { RecommendationsCard } from "@/components/RecommendationsCard";
@@ -85,27 +85,58 @@ export default function ActividadV2() {
 
   // "llegaron a X" — el estado que el tenant configuró como resultado
   // (`funnel_outcome_status_ids`), mostrando el que más gente recibió como
-  // ejemplo. Su % NO se calcula acá: reusamos `outcomeSharePct`, la MISMA
-  // fórmula (y el mismo total) que ya muestra "¿En qué terminaron las
-  // consultas?" para esa columna — así los dos widgets nunca pueden mostrar
-  // números distintos para el mismo dato.
+  // ejemplo. Su % se calcula acá contra `moved` (no contra el total de
+  // OutcomeBreakdown) a propósito: dentro de ESTE widget cada flecha
+  // siempre quiere decir "% del paso anterior que llegó al siguiente", así
+  // los tres pasos son comparables entre sí. OutcomeBreakdown responde una
+  // pregunta distinta ("de todo lo que tocamos, qué % fue esto") y por eso
+  // puede mostrar, a propósito, un número distinto para el mismo estado.
   const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
   const finalLabel = topFinalStage?.final_status_name ?? null;
   const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
-  const reachedPct = reached !== null ? outcomeSharePct(report.columns, reached) : null;
+  const reachedPct = reached !== null ? safePct(moved, reached) : null;
 
-  // Bifurcación del funnel: parte de las conversaciones que "no avanzaron"
-  // en realidad ya está resuelta — una FAQ (envíos, pagos, garantía,
-  // horarios) es una consulta cerrada que nunca iba a mover al lead de
-  // columna, no una que quedó sin responder. Mostrarla como una rama del
-  // funnel (en vez de una leyenda aparte) explica el hueco entre el % que
-  // avanzó y el 100% en vez de dejarlo como un misterio.
+  // Ramas del funnel: ambas de la MISMA fuente que "conversaciones"/"leads
+  // avanzaron" (lead_tracking), a diferencia del bug anterior que mezclaba
+  // un log de otro sistema (bot menu) como si fuera parte de la misma
+  // torta y hacía que dos % sumaran más de 100%.
+  const stillInProgress = conversationsAreCrmBased ? Math.max(conversations - moved, 0) : 0;
+  const handoffCount = report.hasHandoff ? report.handoffPeriodTotal : 0;
+  const funnelBranches = [
+    ...(stillInProgress > 0
+      ? [{
+          value: stillInProgress,
+          label: "siguen en curso",
+          percent: safePct(conversations, stillInProgress),
+          percentBasis: "de tus conversaciones",
+        }]
+      : []),
+    ...(handoffCount > 0
+      ? [{
+          value: handoffCount,
+          label: "derivadas a un humano",
+          percent: safePct(moved, handoffCount),
+          percentBasis: "de los que avanzaron",
+        }]
+      : []),
+  ];
+
+  // Nota aparte (no rama): una FAQ (envíos, pagos, garantía, horarios)
+  // resuelta por el menú guiado del bot es una consulta cerrada, pero viene
+  // de `chat_messages`/menú, sin `lead_id` — no hay forma de confirmar que
+  // sea un subconjunto de "conversaciones", por eso no se dibuja como parte
+  // del mismo embudo (ver docstring de PatientJourneyFunnel).
   const informationalCount = menuReport.connected ? menuReport.informational ?? 0 : 0;
-  const funnelBranch = informationalCount > 0
-    ? { value: informationalCount, label: "consultas resueltas (FAQ)", percent: safePct(conversations, informationalCount) }
+  const funnelNote = informationalCount > 0
+    ? {
+        value: informationalCount,
+        label: "consultas resueltas por FAQ",
+        percent: safePct(conversations, informationalCount),
+        hint: "otro canal, aparte de este embudo",
+      }
     : null;
 
   const deltaPct = overview.total != null && overview.previousTotal
@@ -185,9 +216,10 @@ export default function ActividadV2() {
                   { verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null },
                   { verb: `llega a ${finalLabel}`, percent: reachedPct },
                 ]
-              : [{ verb: "avanzó" }]
+              : [{ verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null }]
           }
-          branch={funnelBranch}
+          branches={funnelBranches}
+          note={funnelNote}
         />
       )}
 
