@@ -99,30 +99,29 @@ export default function ActividadV2() {
   const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
   const reachedPct = reached !== null ? safePct(moved, reached) : null;
 
-  // Ramas del funnel: ambas de la MISMA fuente que "conversaciones"/"leads
-  // avanzaron" (lead_tracking), a diferencia del bug anterior que mezclaba
-  // un log de otro sistema (bot menu) como si fuera parte de la misma
-  // torta y hacía que dos % sumaran más de 100%.
+  // Bifurcación al final de "avanzaron" (compra / derivado a humano) y rama
+  // de "conversaciones" para "siguen en curso" — todas de la MISMA fuente
+  // (lead_tracking), a diferencia del bug anterior que mezclaba un log de
+  // otro sistema (bot menu) como si fuera parte de la misma torta y hacía
+  // que dos % sumaran más de 100%.
   const stillInProgress = conversationsAreCrmBased ? Math.max(conversations - moved, 0) : 0;
   const handoffCount = report.hasHandoff ? report.handoffPeriodTotal : 0;
-  const funnelBranches = [
-    ...(stillInProgress > 0
-      ? [{
-          value: stillInProgress,
-          label: "siguen en curso",
-          percent: safePct(conversations, stillInProgress),
-          percentBasis: "de tus conversaciones",
-        }]
+  const funnelOutcomes = [
+    ...(finalLabel && reached !== null
+      ? [{ value: reached, label: `llegó a ${finalLabel}`, verb: `llega a ${finalLabel}`, percent: reachedPct, accent: "success" as const }]
       : []),
     ...(handoffCount > 0
-      ? [{
-          value: handoffCount,
-          label: "derivadas a un humano",
-          percent: safePct(moved, handoffCount),
-          percentBasis: "de los que avanzaron",
-        }]
+      ? [{ value: handoffCount, label: "se derivó a un humano", verb: "se derivó a humano", percent: safePct(moved, handoffCount), accent: "warning" as const }]
       : []),
   ];
+  const funnelBranches = conversationsAreCrmBased && stillInProgress > 0
+    ? [{
+        value: stillInProgress,
+        label: "siguen en curso",
+        percent: safePct(conversations, stillInProgress),
+        percentBasis: "de tus conversaciones",
+      }]
+    : [];
 
   // Nota aparte (no rama): una FAQ (envíos, pagos, garantía, horarios)
   // resuelta por el menú guiado del bot es una consulta cerrada, pero viene
@@ -210,18 +209,11 @@ export default function ActividadV2() {
           steps={[
             { label: "conversaciones", value: conversations, accent: "accent" },
             { label: "leads avanzaron", value: moved, accent: "info" },
-            ...(finalLabel && reached !== null
-              ? [{ label: `llegaron a ${finalLabel}`, value: reached, accent: "success" as const }]
-              : []),
           ]}
-          transitions={
-            finalLabel && reached !== null
-              ? [
-                  { verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null },
-                  { verb: `llega a ${finalLabel}`, percent: reachedPct },
-                ]
-              : [{ verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null }]
-          }
+          transitions={[
+            { verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null },
+          ]}
+          outcomes={funnelOutcomes}
           branches={funnelBranches}
           note={funnelNote}
         />
