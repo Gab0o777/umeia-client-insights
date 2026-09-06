@@ -83,64 +83,72 @@ export default function ActividadV2() {
     ? pipelinesWithBase.reduce((sum, f) => sum + (f.advanced_period_total ?? 0), 0)
     : report.pipelinesPeriodStats.reduce((sum, p) => sum + p.leads_active, 0);
 
-  // "llegaron a X" — el estado que el tenant configuró como resultado
-  // (`funnel_outcome_status_ids`), mostrando el que más gente recibió como
-  // ejemplo. Su % se calcula acá contra `moved` (no contra el total de
-  // OutcomeBreakdown) a propósito: dentro de ESTE widget cada flecha
-  // siempre quiere decir "% del paso anterior que llegó al siguiente", así
-  // los tres pasos son comparables entre sí. OutcomeBreakdown responde una
+  // "llegó a X" — TODOS los destinos de negocio que el tenant configuró
+  // (`funnel_outcome_status_ids`), uno por pipeline (ej. "Ventas" → intención
+  // de compra, "Soporte" → atención humana, "Service" → servicio técnico).
+  // Antes solo se mostraba el más grande (`topFinalStage`) y el resto
+  // desaparecía del widget aunque existieran — ahora se listan todos. % acá
+  // se calcula contra `moved` (no contra el total de OutcomeBreakdown) a
+  // propósito: dentro de ESTE widget cada flecha siempre quiere decir "% del
+  // paso anterior que llegó al siguiente". OutcomeBreakdown responde una
   // pregunta distinta ("de todo lo que tocamos, qué % fue esto") y por eso
   // puede mostrar, a propósito, un número distinto para el mismo estado.
-  const topFinalStage = report.funnelStages.reduce<typeof report.funnelStages[number] | null>(
+  const namedOutcomeStages = report.funnelStages.filter(f => f.final_period_total > 0);
+  // Para la oración de "Lo que pasó esta semana" alcanza con destacar el
+  // destino más grande — el detalle completo (con todos los destinos) vive
+  // en el árbol de abajo.
+  const topOutcomeStage = namedOutcomeStages.reduce<typeof namedOutcomeStages[number] | null>(
     (best, f) => (!best || f.final_period_total > best.final_period_total ? f : best),
     null
   );
-  const finalLabel = topFinalStage?.final_status_name ?? null;
-  const reached = finalLabel ? topFinalStage?.final_period_total ?? 0 : null;
-  const reachedPct = reached !== null ? safePct(moved, reached) : null;
+  const namedOutcomes = namedOutcomeStages.map(f => ({
+    value: f.final_period_total,
+    label: `llegó a ${f.final_status_name ?? "destino"}`,
+    verb: `llega a ${f.final_status_name ?? "destino"}`,
+    percent: safePct(moved, f.final_period_total),
+    accent: "success" as const,
+  }));
 
-  // Bifurcación al final de "avanzaron" (compra / derivado a humano) y rama
-  // de "conversaciones" para "siguen en curso" — todas de la MISMA fuente
-  // (lead_tracking), a diferencia del bug anterior que mezclaba un log de
-  // otro sistema (bot menu) como si fuera parte de la misma torta y hacía
-  // que dos % sumaran más de 100%.
-  const stillInProgress = conversationsAreCrmBased ? Math.max(conversations - moved, 0) : 0;
   const handoffCount = report.hasHandoff ? report.handoffPeriodTotal : 0;
-  const funnelOutcomes = [
-    ...(finalLabel && reached !== null
-      ? [{ value: reached, label: `llegó a ${finalLabel}`, verb: `llega a ${finalLabel}`, percent: reachedPct, accent: "success" as const }]
-      : []),
-    ...(handoffCount > 0
-      ? [{ value: handoffCount, label: "se derivó a un humano", verb: "se derivó a humano", percent: safePct(moved, handoffCount), accent: "warning" as const }]
-      : []),
-  ];
-  const funnelBranches = conversationsAreCrmBased && stillInProgress > 0
+  const handoffOutcome = handoffCount > 0
     ? [{
-        value: stillInProgress,
-        label: "siguen en curso",
-        percent: safePct(conversations, stillInProgress),
-        percentBasis: "de tus conversaciones",
+        value: handoffCount,
+        label: "se derivó a un humano",
+        verb: "se derivó a humano",
+        percent: safePct(moved, handoffCount),
+        accent: "warning" as const,
       }]
     : [];
 
-  // Nota aparte (no rama): una FAQ (envíos, pagos, garantía, horarios)
-  // resuelta por el menú guiado del bot es una consulta cerrada, pero viene
-  // de `chat_messages`/menú, sin `lead_id` — no hay forma de confirmar que
-  // sea un subconjunto de "conversaciones", por eso no se dibuja como parte
-  // del mismo embudo (ver docstring de PatientJourneyFunnel). Tampoco es
-  // excluyente con "avanzó": una misma conversación puede recibir una
-  // respuesta de FAQ (ej. horario) Y MÁS TARDE avanzar/comprar — no son dos
-  // mitades de la misma torta, por eso el hint lo aclara explícitamente en
-  // vez de dejar que el lector asuma que son categorías separadas.
-  const informationalCount = menuReport.connected ? menuReport.informational ?? 0 : 0;
-  const funnelNote = informationalCount > 0
-    ? {
-        value: informationalCount,
-        label: "consultas resueltas por FAQ",
-        percent: safePct(conversations, informationalCount),
-        hint: "no excluye haber avanzado: un cliente puede preguntar el horario y después comprar",
-      }
-    : null;
+  // FAQ ya no se mide con la cuenta independiente del menú guiado del bot
+  // (`menuReport`, tabla `chat_messages`, sin `lead_id`) — comparada contra
+  // "avanzó" (lead_tracking) esos dos números podían no coincidir porque
+  // salían de sistemas distintos sin join posible, y terminaba pareciendo
+  // que las cuentas no cerraban. Ahora "resueltas por FAQ" es, por
+  // definición, el RESTO de "avanzó" que no llegó a ningún destino de
+  // negocio trackeado (compra, atención humana, etc) — así los cuatro
+  // números siempre suman exactamente `moved`. Solo se muestra para
+  // tenants con el menú guiado habilitado (si no, "avanzó" no tiene por qué
+  // implicar FAQ en absoluto).
+  const trackedOutcomesTotal = namedOutcomeStages.reduce((sum, f) => sum + f.final_period_total, 0) + handoffCount;
+  const faqCount = menuReport.connected ? Math.max(moved - trackedOutcomesTotal, 0) : 0;
+  const faqOutcome = faqCount > 0
+    ? [{
+        value: faqCount,
+        label: "resueltas por FAQ",
+        verb: "se resuelve por FAQ",
+        percent: safePct(moved, faqCount),
+        accent: "info" as const,
+      }]
+    : [];
+
+  const funnelOutcomes = [...faqOutcome, ...namedOutcomes, ...handoffOutcome];
+
+  // "siguen en curso": el resto de "conversaciones" que todavía no avanzó
+  // — misma fuente (lead_tracking) que el resto, cuelga de "conversaciones"
+  // con el mismo peso visual que "avanzó" (no como nota al pie) para que
+  // quede claro que ya está incluido en el total de arriba.
+  const stillInProgress = conversationsAreCrmBased ? Math.max(conversations - moved, 0) : 0;
 
   const deltaPct = overview.total != null && overview.previousTotal
     ? Math.round(((overview.total - overview.previousTotal) / overview.previousTotal) * 1000) / 10
@@ -177,8 +185,8 @@ export default function ActividadV2() {
               <p className="text-2xl leading-snug font-semibold">
                 {brandName} respondió <span className="font-bold text-accent">{conversations.toLocaleString("es-AR")}</span> consultas
                 y ayudó a mover <span className="font-bold text-info">{moved.toLocaleString("es-AR")}</span> {noun}.
-                {finalLabel && reached !== null && (
-                  <> <span className="font-bold text-success">{reached.toLocaleString("es-AR")}</span> llegaron a {finalLabel}.</>
+                {topOutcomeStage && (
+                  <> <span className="font-bold text-success">{topOutcomeStage.final_period_total.toLocaleString("es-AR")}</span> llegaron a {topOutcomeStage.final_status_name}.</>
                 )}
               </p>
               {deltaPct !== null && (
@@ -206,16 +214,22 @@ export default function ActividadV2() {
       ) : (
         <PatientJourneyFunnel
           title={`El recorrido de tus ${noun}`}
-          steps={[
-            { label: "conversaciones", value: conversations, accent: "accent" },
-            { label: "leads avanzaron", value: moved, accent: "info" },
-          ]}
-          transitions={[
-            { verb: "avanzó", percent: conversationsAreCrmBased ? safePct(conversations, moved) : null },
-          ]}
+          total={{ value: conversations, label: "conversaciones" }}
+          advanced={{
+            value: moved,
+            label: "leads avanzaron",
+            verb: "avanzó",
+            percent: conversationsAreCrmBased ? safePct(conversations, moved) : null,
+          }}
+          remainder={conversationsAreCrmBased && stillInProgress > 0
+            ? {
+                value: stillInProgress,
+                label: "siguen en curso",
+                verb: "sigue en curso",
+                percent: safePct(conversations, stillInProgress),
+              }
+            : null}
           outcomes={funnelOutcomes}
-          branches={funnelBranches}
-          note={funnelNote}
         />
       )}
 
