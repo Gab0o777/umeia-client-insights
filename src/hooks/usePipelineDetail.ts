@@ -92,7 +92,8 @@ export function usePipelineDetail(
         return res.ok ? (res.json() as Promise<Resp>) : null;
       })
       .then(data => {
-        if (cancelled || !data) return;
+        if (cancelled) return;
+        if (!data) { setS(prev => ({ ...prev, loading: false })); return; }
         setS({
           pipelineId: data.pipeline_id,
           pipelineName: data.pipeline_name,
