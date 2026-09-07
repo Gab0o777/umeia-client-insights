@@ -1,22 +1,18 @@
 /**
- * PipelineDetailPanel — "Detalle por pipeline": colapsado por defecto,
- * tabs "Todos" + cada pipeline del tenant. "Todos" muestra el desglose
- * simple (OutcomeBreakdown, como antes) — el orden y nombre de etapas solo
- * tiene sentido dentro de UN pipeline, así que el panel rico (sentencia +
- * cards + gráfico diario + alertas + movimientos recientes) solo aparece
- * al elegir un pipeline puntual, alimentado por `usePipelineDetail`. Parte
- * de Actividad v2.
+ * PipelineDetailPanel — "Detalle por pipeline": colapsado por defecto, tabs
+ * con cada pipeline del tenant (sin "Todos" — el orden y nombre de etapas
+ * solo tiene sentido dentro de UN pipeline), preseleccionando el primero
+ * apenas carga. Panel rico (sentencia + cards + gráfico diario + alertas +
+ * movimientos recientes) alimentado por `usePipelineDetail`. Parte de
+ * Actividad v2.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, ChevronDown, ExternalLink } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { cn } from "@/lib/utils";
 import { LeadStatusReport } from "@/hooks/useLeadStatusReport";
 import { usePipelineDetail, PipelineStage } from "@/hooks/usePipelineDetail";
-import { OutcomeBreakdown } from "@/components/OutcomeBreakdown";
 import { useAuth } from "@/context/AuthContext";
-
-const ALL_PIPELINES = "all" as const;
 
 const STAGE_COLORS = [
   { text: "text-accent", bg: "bg-accent/15 text-accent", bar: "hsl(var(--accent))" },
@@ -256,12 +252,18 @@ function PipelineRichView({ apiSlug, pipelineId, hours, noun }: { apiSlug?: stri
 export function PipelineDetailPanel({ report, hours }: { report: LeadStatusReport; hours: number }) {
   const { tenant } = useAuth();
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<number | typeof ALL_PIPELINES>(ALL_PIPELINES);
+  const [selected, setSelected] = useState<number | null>(null);
   const noun = tenant?.vertical === "clinica" ? "pacientes" : tenant?.vertical === "educacion" ? "alumnos" : "leads";
 
-  const visibleColumns = selected === ALL_PIPELINES
-    ? report.columns
-    : report.columns.filter(c => c.pipeline_id === selected);
+  // Sin tab "Todos": el panel siempre muestra un pipeline puntual (el orden
+  // de etapas no tiene sentido mezclando varios), así que apenas cargan los
+  // pipelines del tenant se preselecciona el primero en vez de dejar el
+  // panel vacío hasta que el usuario haga click.
+  useEffect(() => {
+    if (selected === null && report.pipelines.length > 0) {
+      setSelected(report.pipelines[0].pipeline_id);
+    }
+  }, [report.pipelines, selected]);
 
   return (
     <div className="premium-card p-5">
@@ -270,34 +272,27 @@ export function PipelineDetailPanel({ report, hours }: { report: LeadStatusRepor
         <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", open && "rotate-180")} />
       </button>
 
-      <div className="mt-4 flex items-center gap-0.5 bg-secondary rounded-md p-0.5 w-fit flex-wrap">
-        <button
-          onClick={() => setSelected(ALL_PIPELINES)}
-          className={cn(
-            "px-2.5 py-1 rounded text-xs font-medium transition-colors",
-            selected === ALL_PIPELINES ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          Todos
-        </button>
-        {report.pipelines.map(p => (
-          <button
-            key={p.pipeline_id}
-            onClick={() => setSelected(p.pipeline_id)}
-            className={cn(
-              "px-2.5 py-1 rounded text-xs font-medium transition-colors",
-              selected === p.pipeline_id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {p.pipeline_name ?? `Embudo ${p.pipeline_id}`}
-          </button>
-        ))}
-      </div>
+      {report.pipelines.length > 0 && (
+        <div className="mt-4 flex items-center gap-0.5 bg-secondary rounded-md p-0.5 w-fit flex-wrap">
+          {report.pipelines.map(p => (
+            <button
+              key={p.pipeline_id}
+              onClick={() => setSelected(p.pipeline_id)}
+              className={cn(
+                "px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                selected === p.pipeline_id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {p.pipeline_name ?? `Embudo ${p.pipeline_id}`}
+            </button>
+          ))}
+        </div>
+      )}
 
       {open && (
         <div className="mt-4">
-          {selected === ALL_PIPELINES ? (
-            <OutcomeBreakdown columns={visibleColumns} bare />
+          {selected === null ? (
+            <div className="py-10 text-center text-xs text-muted-foreground">Sin pipelines sincronizados para este tenant todavía.</div>
           ) : (
             <PipelineRichView apiSlug={tenant?.apiSlug} pipelineId={selected} hours={hours} noun={noun} />
           )}
