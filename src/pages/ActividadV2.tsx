@@ -144,6 +144,21 @@ export default function ActividadV2() {
 
   const funnelOutcomes = [...faqOutcome, ...namedOutcomes, ...handoffOutcome];
 
+  // Vista resumida del árbol (colapsada por default): destaca el resultado
+  // de negocio más grande (`topOutcomeStage`, ya calculado arriba para la
+  // oración "Lo que pasó esta semana"), no FAQ — aunque FAQ sea el bucket
+  // más grande en volumen, no es lo que un dueño de negocio quiere ver
+  // primero.
+  const funnelHeadline = topOutcomeStage
+    ? {
+        value: topOutcomeStage.final_period_total,
+        label: `llegó a ${topOutcomeStage.final_status_name ?? "destino"}`,
+        verb: `llega a ${topOutcomeStage.final_status_name ?? "destino"}`,
+        percent: safePct(moved, topOutcomeStage.final_period_total),
+        accent: "success" as const,
+      }
+    : null;
+
   // "siguen en curso": el resto de "conversaciones" que todavía no avanzó
   // — misma fuente (lead_tracking) que el resto, cuelga de "conversaciones"
   // con el mismo peso visual que "avanzó" (no como nota al pie) para que
@@ -230,6 +245,7 @@ export default function ActividadV2() {
               }
             : null}
           outcomes={funnelOutcomes}
+          headline={funnelHeadline}
         />
       )}
 

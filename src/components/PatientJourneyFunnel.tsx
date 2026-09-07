@@ -21,7 +21,8 @@
  * aparte de otro sistema — ver comentario en ActividadV2.tsx). Este
  * componente solo dibuja lo que le pasan y no calcula ningún %.
  */
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FunnelNode {
@@ -76,9 +77,11 @@ function StepBox({
   );
 }
 
-/** Línea recta y corta — conecta una caja "trunk" con el spine de sus hijos. */
+/** Conecta una caja "trunk" con el spine de sus hijos (o la siguiente caja,
+ * en la vista resumida) — crece para ocupar el ancho disponible en vez de
+ * dejar aire vacío a la derecha del diagrama. */
 function StubLine() {
-  return <div className="h-0.5 w-5 shrink-0 bg-border" />;
+  return <div className="h-0.5 min-w-5 flex-1 bg-border" />;
 }
 
 /** Badge de %+verbo que cuelga sobre el conector, entre el spine y la caja hija. */
@@ -112,7 +115,7 @@ function Branch({ children }: { children: React.ReactNode }) {
 }
 
 export function PatientJourneyFunnel({
-  title, total, advanced, remainder, outcomes,
+  title, total, advanced, remainder, outcomes, headline,
 }: {
   title: string;
   total: { value: number; label: string };
@@ -122,46 +125,85 @@ export function PatientJourneyFunnel({
   remainder?: FunnelNode | null;
   /** Hijos de `advanced` — a qué llegaron los que avanzaron. */
   outcomes?: FunnelOutcome[];
+  /** El outcome más representativo, para la vista resumida (colapsada) —
+   * normalmente un resultado de negocio real (ej. intención de compra), no
+   * FAQ (que domina en volumen pero no es lo que un dueño de negocio quiere
+   * ver primero). */
+  headline?: FunnelOutcome | null;
 }) {
+  const canExpand = (outcomes && outcomes.length > 0) || !!remainder;
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="premium-card p-5">
-      <div className="text-sm font-semibold mb-5">{title}</div>
+      <button
+        type="button"
+        onClick={() => canExpand && setExpanded(e => !e)}
+        className={cn("flex w-full items-center justify-between gap-4 mb-5", canExpand ? "cursor-pointer" : "cursor-default")}
+        disabled={!canExpand}
+      >
+        <span className="text-sm font-semibold">{title}</span>
+        {canExpand && (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {expanded ? "ver resumen" : "ver detalle completo"}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+          </span>
+        )}
+      </button>
 
       <div className="overflow-x-auto">
-        <div className="flex items-center w-fit">
-          <StepBox value={total.value} label={total.label} accent="accent" order={1} />
-          <StubLine />
+        {expanded ? (
+          <div className="flex w-full items-center">
+            <StepBox value={total.value} label={total.label} accent="accent" order={1} />
+            <StubLine />
 
-          <Spine>
-            <Branch>
-              <LinkBadge verb={advanced.verb} percent={advanced.percent} />
-              <StepBox value={advanced.value} label={advanced.label} accent="info" order={2} />
-
-              {outcomes && outcomes.length > 0 && (
-                <>
-                  <StubLine />
-                  <Spine>
-                    {outcomes.map(outcome => (
-                      <Fragment key={outcome.label}>
-                        <Branch>
-                          <LinkBadge verb={outcome.verb} percent={outcome.percent} />
-                          <StepBox value={outcome.value} label={outcome.label} accent={outcome.accent} />
-                        </Branch>
-                      </Fragment>
-                    ))}
-                  </Spine>
-                </>
-              )}
-            </Branch>
-
-            {remainder && (
+            <Spine>
               <Branch>
-                <LinkBadge verb={remainder.verb} percent={remainder.percent} />
-                <StepBox value={remainder.value} label={remainder.label} accent="muted" />
+                <LinkBadge verb={advanced.verb} percent={advanced.percent} />
+                <StepBox value={advanced.value} label={advanced.label} accent="info" order={2} />
+
+                {outcomes && outcomes.length > 0 && (
+                  <>
+                    <StubLine />
+                    <Spine>
+                      {outcomes.map(outcome => (
+                        <Fragment key={outcome.label}>
+                          <Branch>
+                            <LinkBadge verb={outcome.verb} percent={outcome.percent} />
+                            <StepBox value={outcome.value} label={outcome.label} accent={outcome.accent} />
+                          </Branch>
+                        </Fragment>
+                      ))}
+                    </Spine>
+                  </>
+                )}
               </Branch>
+
+              {remainder && (
+                <Branch>
+                  <LinkBadge verb={remainder.verb} percent={remainder.percent} />
+                  <StepBox value={remainder.value} label={remainder.label} accent="muted" />
+                </Branch>
+              )}
+            </Spine>
+          </div>
+        ) : (
+          <div className="flex w-full items-center">
+            <StepBox value={total.value} label={total.label} accent="accent" order={1} />
+            <StubLine />
+            <LinkBadge verb={advanced.verb} percent={advanced.percent} />
+            <StubLine />
+            <StepBox value={advanced.value} label={advanced.label} accent="info" order={2} />
+            {headline && (
+              <>
+                <StubLine />
+                <LinkBadge verb={headline.verb} percent={headline.percent} />
+                <StubLine />
+                <StepBox value={headline.value} label={headline.label} accent={headline.accent} />
+              </>
             )}
-          </Spine>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
