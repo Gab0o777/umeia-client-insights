@@ -256,7 +256,7 @@ export default function ActividadV2() {
       </div>
 
       {/* ── Detalle por pipeline ── */}
-      {!report.loading && <PipelineDetailPanel report={report} />}
+      {!report.loading && <PipelineDetailPanel report={report} hours={hours} />}
     </div>
   );
 }
