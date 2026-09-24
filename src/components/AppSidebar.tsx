@@ -9,6 +9,8 @@ import {
   LifeBuoy,
   FileCheck2,
   LogOut,
+  Megaphone,
+  TrendingUp,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/context/AuthContext";
@@ -42,6 +44,16 @@ const NAV = [
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ];
 
+// Sección "Advertisement" (Google Ads vía Zernio) — hardcodeada a bligraf
+// por ahora: es una vista custom para un solo cliente, no algo derivado de
+// tenant_config como el resto del NAV, así que no vale la pena generalizar
+// el mecanismo de gating hasta que haya un segundo tenant que la necesite.
+const ADS_NAV = [
+  { to: "/ads/resumen", label: "Resumen", icon: TrendingUp, end: true },
+  { to: "/ads/campanas", label: "Campañas", icon: Megaphone },
+];
+const ADS_TENANTS = ["bligraf"];
+
 const TICKETS_NAV = { to: "/tickets", label: "Tickets", icon: LifeBuoy };
 
 export function AppSidebar() {
@@ -67,6 +79,7 @@ export function AppSidebar() {
   }, [tenant, accessToken]);
 
   const visibleNav = NAV.filter((item) => !item.moduleId || activeModules.has(item.moduleId));
+  const showAdsNav = ADS_TENANTS.includes(tenant?.apiSlug ?? "");
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -129,6 +142,31 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {showAdsNav && (
+          <SidebarGroup>
+            {!collapsed && <SidebarGroupLabel>Advertisement</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {ADS_NAV.map((item) => {
+                  const isActive = item.end
+                    ? location.pathname === item.to
+                    : location.pathname.startsWith(item.to);
+                  return (
+                    <SidebarMenuItem key={item.to}>
+                      <SidebarMenuButton asChild isActive={isActive}>
+                        <NavLink to={item.to} end={item.end}>
+                          <item.icon className="h-4 w-4" />
+                          {!collapsed && <span>{item.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-3">

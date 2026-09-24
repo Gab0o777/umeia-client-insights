@@ -321,11 +321,13 @@ export default function Resumen() {
         <div className="premium-card p-5">
           <h3 className="text-sm font-semibold mb-4">Configuración</h3>
           <div className="space-y-2">
-            <ConfigRow
-              icon={<Cloud className="w-4 h-4 text-info" />}
-              label="Cloud API directa"
-              sub={tenant.whatsapp.mode}
-            />
+            {tenant.whatsapp && (
+              <ConfigRow
+                icon={<Cloud className="w-4 h-4 text-info" />}
+                label="Cloud API directa"
+                sub={tenant.whatsapp.mode}
+              />
+            )}
             <ConfigRow
               icon={<Users className="w-4 h-4 text-violet-400" />}
               label="CRM Kommo"

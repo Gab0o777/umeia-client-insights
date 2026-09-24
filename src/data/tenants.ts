@@ -2,7 +2,10 @@
 // Los números reales vienen de useRealMetrics → umeia.space/api/metrics/*
 
 export type TenantId   = "electro-rai" | "centro-copacabana" | "gremio";
-export type TenantType = "cloud" | "on-premise";
+// "reporting": tenant sin bot conversacional, solo consume dashboards de
+// datos (p.ej. bligraf con Google Ads vía Zernio) — ver core/api/*.py
+// tenant_configs/bligraf.json (portal.type).
+export type TenantType = "cloud" | "on-premise" | "reporting";
 
 export interface TenantConfig {
   id:            string;      // TenantId para los tenants legacy del mapa estático, o el apiSlug para tenants nuevos resueltos dinámicamente
@@ -11,7 +14,9 @@ export interface TenantConfig {
   type:          TenantType;
   vertical:      string;
   verticalLabel: string;
-  whatsapp: {
+  // Ausente para tenants "reporting" (sin bot conversacional, p.ej. bligraf)
+  // — su tenant_config no tiene bloque whatsapp porque no aplica.
+  whatsapp?: {
     number:    string;
     connected: boolean;
     cloudApi:  boolean;

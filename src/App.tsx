@@ -17,6 +17,8 @@ import Conversaciones from "./pages/Conversaciones";
 import Campanas from "./pages/Campanas";
 import Automatizacion from "./pages/Automatizacion";
 import Origen from "./pages/Origen";
+import AdsResumen from "./pages/AdsResumen";
+import AdsCampanas from "./pages/AdsCampanas";
 import Costos from "./pages/Costos";
 import Modulos from "./pages/Modulos";
 import Infraestructura from "./pages/Infraestructura";
@@ -54,6 +56,8 @@ const App = () => (
                 <Route path="/campanas" element={<Campanas />} />
                 <Route path="/automatizacion" element={<Automatizacion />} />
                 <Route path="/origen" element={<Origen />} />
+                <Route path="/ads/resumen" element={<AdsResumen />} />
+                <Route path="/ads/campanas" element={<AdsCampanas />} />
                 <Route path="/costos" element={<Costos />} />
                 <Route path="/modulos" element={<Modulos />} />
                 <Route path="/infraestructura" element={<Infraestructura />} />

@@ -41,10 +41,10 @@ async function fetchPortalProfile(token: string): Promise<AuthState | null> {
 
 interface PortalBlock {
   name:          string;
-  type:          "cloud" | "on-premise";
+  type:          "cloud" | "on-premise" | "reporting";
   vertical:      string;
   vertical_label: string;
-  whatsapp: {
+  whatsapp?: {
     number:    string;
     connected: boolean;
     cloud_api: boolean;
@@ -73,12 +73,14 @@ async function fetchTenantPortalInfo(token: string, apiSlug: string): Promise<Te
       type:          p.type,
       vertical:      p.vertical,
       verticalLabel: p.vertical_label,
-      whatsapp: {
-        number:    p.whatsapp.number,
-        connected: p.whatsapp.connected,
-        cloudApi:  p.whatsapp.cloud_api,
-        mode:      p.whatsapp.mode,
-      },
+      whatsapp: p.whatsapp
+        ? {
+            number:    p.whatsapp.number,
+            connected: p.whatsapp.connected,
+            cloudApi:  p.whatsapp.cloud_api,
+            mode:      p.whatsapp.mode,
+          }
+        : undefined,
     };
   } catch {
     return null;
