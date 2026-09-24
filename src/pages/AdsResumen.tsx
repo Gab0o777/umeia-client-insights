@@ -39,7 +39,7 @@ export default function AdsResumen() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Advertisement — Resumen"
+        title="Publicidad — Resumen"
         description={`Inversión y performance de Google Ads de ${tenant.name}, sincronizado automáticamente.`}
         actions={
           <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
@@ -123,7 +123,7 @@ export default function AdsResumen() {
       <div className="premium-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold">Top campañas por inversión</h3>
-          <Link to="/ads/campanas" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+          <Link to="/publicidad/campanas" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
             Ver todas las campañas <ArrowRight size={12} />
           </Link>
         </div>

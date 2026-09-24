@@ -133,7 +133,7 @@ export default function AdsCampanas() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Advertisement — Campañas"
+        title="Publicidad — Campañas"
         description={`Detalle de campañas y anuncios de Google Ads de ${tenant.name}. Click en una fila para ver sus anuncios.`}
       />
 

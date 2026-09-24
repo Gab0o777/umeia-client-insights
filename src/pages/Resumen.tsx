@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
@@ -174,6 +174,9 @@ export default function Resumen() {
   const [showKommo, setShowKommo] = useState(false);
   const brandName = getBrandName();
   if (!tenant) return null;
+  // Tenants "reporting" (sin bot, p.ej. bligraf) no tienen nada que mostrar
+  // acá — su home real es su propia sección (hoy, Publicidad).
+  if (tenant.type === "reporting") return <Navigate to="/publicidad/resumen" replace />;
 
   const isToday = range.key === "24h";
 

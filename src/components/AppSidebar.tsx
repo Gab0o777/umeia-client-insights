@@ -44,13 +44,13 @@ const NAV = [
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ];
 
-// Sección "Advertisement" (Google Ads vía Zernio) — hardcodeada a bligraf
-// por ahora: es una vista custom para un solo cliente, no algo derivado de
+// Sección "Publicidad" (Google Ads vía Zernio) — hardcodeada a bligraf por
+// ahora: es una vista custom para un solo cliente, no algo derivado de
 // tenant_config como el resto del NAV, así que no vale la pena generalizar
 // el mecanismo de gating hasta que haya un segundo tenant que la necesite.
 const ADS_NAV = [
-  { to: "/ads/resumen", label: "Resumen", icon: TrendingUp, end: true },
-  { to: "/ads/campanas", label: "Campañas", icon: Megaphone },
+  { to: "/publicidad/resumen", label: "Resumen", icon: TrendingUp, end: true },
+  { to: "/publicidad/campanas", label: "Campañas", icon: Megaphone },
 ];
 const ADS_TENANTS = ["bligraf"];
 
@@ -80,6 +80,11 @@ export function AppSidebar() {
 
   const visibleNav = NAV.filter((item) => !item.moduleId || activeModules.has(item.moduleId));
   const showAdsNav = ADS_TENANTS.includes(tenant?.apiSlug ?? "");
+  // "reporting": tenant sin bot conversacional (p.ej. bligraf, solo Ads) —
+  // el bloque "Navegación" es puro ruido para estos clientes: Resumen,
+  // Actividad, Conversaciones, Documentos y Módulos son todas vistas sobre
+  // datos de automatización que nunca van a tener.
+  const hasAutomation = tenant?.type !== "reporting";
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -102,16 +107,16 @@ export function AppSidebar() {
             <span
               className={cn(
                 "pulse-dot",
-                tenant.type === "cloud" ? "bg-info" : "bg-accent",
+                tenant.type === "cloud" ? "bg-info" : tenant.type === "reporting" ? "bg-warning" : "bg-accent",
               )}
             />
             <span
               className={cn(
                 "text-[10px] font-bold uppercase tracking-wider",
-                tenant.type === "cloud" ? "text-info" : "text-accent",
+                tenant.type === "cloud" ? "text-info" : tenant.type === "reporting" ? "text-warning" : "text-accent",
               )}
             >
-              {tenant.type === "cloud" ? "Cloud" : "On-Premise"}
+              {tenant.type === "cloud" ? "Cloud" : tenant.type === "reporting" ? "Reporting" : "On-Premise"}
             </span>
           </div>
           <div className="mt-2 text-sm font-semibold leading-tight">{tenant.name}</div>
@@ -120,32 +125,34 @@ export function AppSidebar() {
       )}
 
       <SidebarContent>
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Navegación</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleNav.map((item) => {
-                const isActive = item.end
-                  ? location.pathname === item.to
-                  : location.pathname.startsWith(item.to);
-                return (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <NavLink to={item.to} end={item.end}>
-                        <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.label}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {hasAutomation && (
+          <SidebarGroup>
+            {!collapsed && <SidebarGroupLabel>Navegación</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleNav.map((item) => {
+                  const isActive = item.end
+                    ? location.pathname === item.to
+                    : location.pathname.startsWith(item.to);
+                  return (
+                    <SidebarMenuItem key={item.to}>
+                      <SidebarMenuButton asChild isActive={isActive}>
+                        <NavLink to={item.to} end={item.end}>
+                          <item.icon className="h-4 w-4" />
+                          {!collapsed && <span>{item.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {showAdsNav && (
           <SidebarGroup>
-            {!collapsed && <SidebarGroupLabel>Advertisement</SidebarGroupLabel>}
+            {!collapsed && <SidebarGroupLabel>Publicidad</SidebarGroupLabel>}
             <SidebarGroupContent>
               <SidebarMenu>
                 {ADS_NAV.map((item) => {
