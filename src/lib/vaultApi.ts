@@ -81,7 +81,7 @@ export const vaultApi = {
     body: { salt: string; wrapped_private_key_ciphertext: string; wrapped_private_key_iv: string },
   ) =>
     req<{ ok: boolean }>(`/api/portal/vault/identity/passphrase`, token, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify({ tenant_id: tenantId, ...body }),
     }),
 
@@ -94,7 +94,7 @@ export const vaultApi = {
     body: { vault_identity_id: number; ephemeral_public_key: string; ciphertext: string; iv: string },
   ) =>
     req<{ ok: boolean }>(`/api/portal/vault/dek-wrap`, token, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify({ tenant_id: tenantId, ...body }),
     }),
 
@@ -115,7 +115,7 @@ export const vaultApi = {
 
   updateItem: (tenantId: string, token: string | null, id: number, body: { ciphertext: string; iv: string }) =>
     req<VaultItemDto>(`/api/portal/vault/items/${id}`, token, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify({ tenant_id: tenantId, ...body }),
     }),
 
