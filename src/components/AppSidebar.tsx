@@ -11,9 +11,11 @@ import {
   LogOut,
   Megaphone,
   TrendingUp,
+  ShieldCheck,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/context/AuthContext";
+import { useVaultAccess } from "@/hooks/useVaultAccess";
 import { cn } from "@/lib/utils";
 import { API_BASE, authHeaders } from "@/lib/apiClient";
 import {
@@ -56,10 +58,15 @@ const ADS_TENANTS = ["bligraf"];
 
 const TICKETS_NAV = { to: "/tickets", label: "Tickets", icon: LifeBuoy };
 
+// Sección propia, separada de "Navegación" y "Publicidad" — solo aparece
+// para portal users con acceso concedido a la bóveda (ver useVaultAccess).
+const BOVEDA_NAV = { to: "/boveda", label: "Bóveda", icon: ShieldCheck };
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { tenant, user, logout, accessToken } = useAuth();
+  const { hasAccess: hasVaultAccess } = useVaultAccess();
   const location = useLocation();
   const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
 
@@ -170,6 +177,24 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                   );
                 })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {hasVaultAccess && (
+          <SidebarGroup>
+            {!collapsed && <SidebarGroupLabel>Bóveda</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location.pathname.startsWith(BOVEDA_NAV.to)}>
+                    <NavLink to={BOVEDA_NAV.to}>
+                      <BOVEDA_NAV.icon className="h-4 w-4" />
+                      {!collapsed && <span>{BOVEDA_NAV.label}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
