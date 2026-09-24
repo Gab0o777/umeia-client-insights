@@ -5,7 +5,7 @@ import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
 import { CostConnectWizard } from "@/components/CostConnectWizard";
 import {
   Cpu, Users, ListTree, Sparkles, BookOpen, ShoppingCart,
-  Clock, Tag, Zap, DollarSign, Megaphone, CheckCircle2, MinusCircle, LucideIcon,
+  Clock, Tag, Zap, DollarSign, Megaphone, CheckCircle2, MinusCircle, LucideIcon, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE, authHeaders } from "@/lib/apiClient";
@@ -38,6 +38,7 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
   flow_automations: Zap,
   costos:           DollarSign,
   costos_ads:       Megaphone,
+  vault:            ShieldCheck,
 };
 
 function ToggleSwitch({ on, busy, onToggle }: { on: boolean; busy: boolean; onToggle: () => void }) {
