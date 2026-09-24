@@ -44,6 +44,10 @@ interface PortalBlock {
   type:          "cloud" | "on-premise" | "reporting";
   vertical:      string;
   vertical_label: string;
+  // Moneda de facturación para vistas de datos monetarios (p.ej. el
+  // dashboard de Ads de bligraf, que factura en ARS) — configurable a nivel
+  // tenant en tenant_configs/{slug}.json en vez de asumir USD siempre.
+  currency?: string;
   whatsapp?: {
     number:    string;
     connected: boolean;
@@ -73,6 +77,7 @@ async function fetchTenantPortalInfo(token: string, apiSlug: string): Promise<Te
       type:          p.type,
       vertical:      p.vertical,
       verticalLabel: p.vertical_label,
+      currency:      p.currency,
       whatsapp: p.whatsapp
         ? {
             number:    p.whatsapp.number,

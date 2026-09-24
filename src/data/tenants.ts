@@ -14,6 +14,9 @@ export interface TenantConfig {
   type:          TenantType;
   vertical:      string;
   verticalLabel: string;
+  // Moneda para vistas monetarias (p.ej. dashboard de Ads) — configurable
+  // por tenant en tenant_configs/{slug}.json, default USD si no viene.
+  currency?: string;
   // Ausente para tenants "reporting" (sin bot conversacional, p.ej. bligraf)
   // — su tenant_config no tiene bloque whatsapp porque no aplica.
   whatsapp?: {

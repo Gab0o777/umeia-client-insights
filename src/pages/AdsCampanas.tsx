@@ -6,6 +6,7 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
 import { useZernioCampaigns, useZernioAds, ZernioCampaign } from "@/hooks/useZernioAds";
+import { costPrefix } from "@/hooks/useCosts";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ListSkeleton, EmptyData } from "@/components/Skeleton";
 
@@ -24,11 +25,11 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "destructive";
 }
 
-function money(n: number): string {
-  return `US$ ${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function money(n: number, prefix: string): string {
+  return `${prefix}${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function AdsRows({ campaignId, tenantSlug, colSpan }: { campaignId: string; tenantSlug: string; colSpan: number }) {
+function AdsRows({ campaignId, tenantSlug, colSpan, prefix }: { campaignId: string; tenantSlug: string; colSpan: number; prefix: string }) {
   const { ads, loading } = useZernioAds(tenantSlug, campaignId);
 
   if (loading) {
@@ -62,13 +63,13 @@ function AdsRows({ campaignId, tenantSlug, colSpan }: { campaignId: string; tena
           <TableCell><Badge variant={statusVariant(ad.status)} className="text-[10px] px-1.5 py-0">{ad.status}</Badge></TableCell>
           <TableCell className="text-muted-foreground text-xs">—</TableCell>
           <TableCell className="text-muted-foreground text-xs">—</TableCell>
-          <TableCell>{money(ad.spend)}</TableCell>
+          <TableCell>{money(ad.spend, prefix)}</TableCell>
           <TableCell>{ad.impressions.toLocaleString("es-AR")}</TableCell>
           <TableCell>{ad.clicks.toLocaleString("es-AR")}</TableCell>
           <TableCell>{ad.ctr.toFixed(2)}%</TableCell>
-          <TableCell>US$ {ad.cpc.toFixed(2)}</TableCell>
+          <TableCell>{prefix}{ad.cpc.toFixed(2)}</TableCell>
           <TableCell>{ad.conversions.toLocaleString("es-AR")}</TableCell>
-          <TableCell>US$ {ad.cost_per_conversion.toFixed(2)}</TableCell>
+          <TableCell>{prefix}{ad.cost_per_conversion.toFixed(2)}</TableCell>
           <TableCell>{ad.roas.toFixed(2)}x</TableCell>
         </TableRow>
       ))}
@@ -76,7 +77,7 @@ function AdsRows({ campaignId, tenantSlug, colSpan }: { campaignId: string; tena
   );
 }
 
-function CampaignRow({ campaign, tenantSlug, colSpan }: { campaign: ZernioCampaign; tenantSlug: string; colSpan: number }) {
+function CampaignRow({ campaign, tenantSlug, colSpan, prefix }: { campaign: ZernioCampaign; tenantSlug: string; colSpan: number; prefix: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -97,19 +98,19 @@ function CampaignRow({ campaign, tenantSlug, colSpan }: { campaign: ZernioCampai
         <TableCell className="text-xs">{campaign.objective ?? "—"}</TableCell>
         <TableCell className="text-xs">
           {campaign.budget_amount != null
-            ? `${money(campaign.budget_amount)}${campaign.budget_type ? ` (${campaign.budget_type})` : ""}`
+            ? `${money(campaign.budget_amount, prefix)}${campaign.budget_type ? ` (${campaign.budget_type})` : ""}`
             : "—"}
         </TableCell>
-        <TableCell className="font-medium">{money(campaign.spend)}</TableCell>
+        <TableCell className="font-medium">{money(campaign.spend, prefix)}</TableCell>
         <TableCell>{campaign.impressions.toLocaleString("es-AR")}</TableCell>
         <TableCell>{campaign.clicks.toLocaleString("es-AR")}</TableCell>
         <TableCell>{campaign.ctr.toFixed(2)}%</TableCell>
-        <TableCell>US$ {campaign.cpc.toFixed(2)}</TableCell>
+        <TableCell>{prefix}{campaign.cpc.toFixed(2)}</TableCell>
         <TableCell>{campaign.conversions.toLocaleString("es-AR")}</TableCell>
-        <TableCell>US$ {campaign.cost_per_conversion.toFixed(2)}</TableCell>
+        <TableCell>{prefix}{campaign.cost_per_conversion.toFixed(2)}</TableCell>
         <TableCell className="font-medium">{campaign.roas.toFixed(2)}x</TableCell>
       </TableRow>
-      {open && <AdsRows campaignId={campaign.platform_campaign_id} tenantSlug={tenantSlug} colSpan={colSpan} />}
+      {open && <AdsRows campaignId={campaign.platform_campaign_id} tenantSlug={tenantSlug} colSpan={colSpan} prefix={prefix} />}
     </>
   );
 }
@@ -126,6 +127,8 @@ export default function AdsCampanas() {
   if (!tenant) return null;
   // Vista habilitada solo para bligraf por ahora — ver AppSidebar.tsx.
   if (tenant.apiSlug !== "bligraf") return null;
+
+  const prefix = costPrefix(tenant.currency);
 
   return (
     <div className="space-y-6">
@@ -153,6 +156,7 @@ export default function AdsCampanas() {
                   campaign={c}
                   tenantSlug={tenant.apiSlug}
                   colSpan={COLUMNS.length}
+                  prefix={prefix}
                 />
               ))}
             </TableBody>

@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiCard } from "@/components/KpiCard";
 import { useZernioTimeline, useZernioCampaigns } from "@/hooks/useZernioAds";
+import { costPrefix } from "@/hooks/useCosts";
 import { DollarSign, MousePointerClick, Target, TrendingUp, ArrowRight } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -33,6 +34,7 @@ export default function AdsResumen() {
 
   const summary = timeline?.summary ?? null;
   const topCampaigns = [...(campaigns ?? [])].sort((a, b) => b.spend - a.spend).slice(0, 5);
+  const prefix = costPrefix(tenant.currency);
 
   return (
     <div className="space-y-6">
@@ -66,7 +68,7 @@ export default function AdsResumen() {
           <KpiCard
             label="Inversión total"
             value={summary?.total_spend ?? null}
-            prefix="US$ " decimals={2}
+            prefix={prefix} decimals={2}
             icon={DollarSign} accent="warning"
             subtitle={`últimos ${days} días`}
           />
@@ -81,7 +83,7 @@ export default function AdsResumen() {
             value={summary?.total_conversions ?? null}
             decimals={summary && summary.total_conversions % 1 !== 0 ? 1 : 0}
             icon={Target} accent="success"
-            subtitle={summary ? `CPA US$ ${(summary.total_conversions ? summary.total_spend / summary.total_conversions : 0).toFixed(2)}` : undefined}
+            subtitle={summary ? `CPA ${prefix}${(summary.total_conversions ? summary.total_spend / summary.total_conversions : 0).toFixed(2)}` : undefined}
           />
           <KpiCard
             label="ROAS"
@@ -108,7 +110,7 @@ export default function AdsResumen() {
                 <YAxis yAxisId="conv" orientation="right" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar yAxisId="spend" dataKey="spend" name="Gasto (US$)" fill="hsl(var(--warning))" radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="spend" dataKey="spend" name={`Gasto (${prefix.trim()})`} fill="hsl(var(--warning))" radius={[6, 6, 0, 0]} />
                 <Line yAxisId="conv" type="monotone" dataKey="conversions" name="Conversiones" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -140,7 +142,7 @@ export default function AdsResumen() {
                 </div>
                 <div className="flex items-center gap-5 shrink-0 text-right">
                   <div>
-                    <div className="text-sm font-semibold">US$ {c.spend.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
+                    <div className="text-sm font-semibold">{prefix}{c.spend.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
                     <div className="text-[11px] text-muted-foreground">gasto</div>
                   </div>
                   <div className="hidden sm:block">
