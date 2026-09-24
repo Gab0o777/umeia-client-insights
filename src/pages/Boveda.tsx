@@ -17,10 +17,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { vaultApi } from "@/lib/vaultApi";
+import { setupVaultIdentity } from "@/lib/vaultSetup";
 import {
-  deriveKek, generateSalt, generateKeypair, generateDek, generateRecoverySecret,
-  aesGcmEncrypt, aesGcmDecrypt, sealForRecipient, openSealedBox,
-  bytesToBase64, base64ToBytes, bytesToUtf8, utf8ToBytes,
+  aesGcmDecrypt, aesGcmEncrypt, base64ToBytes, bytesToBase64, bytesToUtf8, deriveKek,
+  openSealedBox, sealForRecipient, utf8ToBytes,
 } from "@/lib/vaultCrypto";
 
 interface ItemPayload {
@@ -74,58 +74,16 @@ export default function Boveda() {
 
     setBusy(true);
     try {
-      const salt = generateSalt();
-      const kek = await deriveKek(passphrase, salt);
-      const keypair = generateKeypair();
-      const wrapped = await aesGcmEncrypt(kek, keypair.privateKey);
-
-      const recovery = generateRecoverySecret();
-      const recoverySalt = generateSalt();
-      const recoveryKek = await deriveKek(recovery, recoverySalt);
-      const wrappedForRecovery = await aesGcmEncrypt(recoveryKek, keypair.privateKey);
-
-      const created = await vaultApi.createIdentity(tenantId, accessToken, {
-        salt: bytesToBase64(salt),
-        public_key: bytesToBase64(keypair.publicKey),
-        wrapped_private_key_ciphertext: bytesToBase64(wrapped.ciphertext),
-        wrapped_private_key_iv: bytesToBase64(wrapped.iv),
-        recovery_salt: bytesToBase64(recoverySalt),
-        recovery_wrapped_private_key_ciphertext: bytesToBase64(wrappedForRecovery.ciphertext),
-        recovery_wrapped_private_key_iv: bytesToBase64(wrappedForRecovery.iv),
-      });
-
-      // Bootstrap or inherit the tenant DEK.
-      const dekWrap = await vaultApi.getDekWrap(tenantId, accessToken);
-      let tenantDek: Uint8Array;
-      if (!dekWrap.exists && dekWrap.is_first_admin) {
-        tenantDek = generateDek();
-        const sealed = await sealForRecipient(keypair.publicKey, tenantDek);
-        await vaultApi.putDekWrap(tenantId, accessToken, {
-          vault_identity_id: created.vault_identity_id,
-          ephemeral_public_key: bytesToBase64(sealed.ephemeralPublicKey),
-          ciphertext: bytesToBase64(sealed.ciphertext),
-          iv: bytesToBase64(sealed.iv),
-        });
-      } else if (dekWrap.exists) {
-        tenantDek = await openSealedBox(keypair.privateKey, {
-          ephemeralPublicKey: base64ToBytes(dekWrap.ephemeral_public_key!),
-          ciphertext: base64ToBytes(dekWrap.ciphertext!),
-          iv: base64ToBytes(dekWrap.iv!),
-        });
+      const result = await setupVaultIdentity(tenantId, accessToken, passphrase);
+      setPrivateKey(result.privateKey);
+      setRecoveryCode(result.recoveryCode);
+      if (result.dek) {
+        setDek(result.dek);
+        setPhase("unlocked");
       } else {
-        // Granted but nobody's shared the DEK with us yet.
-        setPrivateKey(keypair.privateKey);
-        setRecoveryCode(recovery);
         toast.info("Tu bóveda está lista. Pedile a otro admin que la abra para compartirte el acceso.");
         setPhase("locked");
-        setBusy(false);
-        return;
       }
-
-      setPrivateKey(keypair.privateKey);
-      setDek(tenantDek);
-      setRecoveryCode(recovery);
-      setPhase("unlocked");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No pudimos crear tu bóveda.");
     } finally {
@@ -356,6 +314,11 @@ export default function Boveda() {
 
       {phase === "unlocked" && (
         <div className="space-y-4">
+          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5 text-accent shrink-0" />
+            Todo se cifra en tu navegador antes de salir de tu computadora — ni el equipo de Umeia puede ver tus contraseñas.
+          </div>
+
           {pendingCount > 0 && (
             <Card className="border-amber-500/30 bg-amber-500/5">
               <CardContent className="flex items-center justify-between py-4">

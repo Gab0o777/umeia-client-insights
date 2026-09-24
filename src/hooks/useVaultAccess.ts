@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { vaultApi } from "@/lib/vaultApi";
+
+/** Dispatched after activating the vault module (or granting/revoking
+ * access) so every mounted useVaultAccess() (e.g. the sidebar) picks up
+ * the change immediately instead of only after a full page reload. */
+export const VAULT_ACCESS_CHANGED_EVENT = "vault-access-changed";
 
 /**
  * hasAccess: grant AND tenant module both on — gates the Bóveda nav/page.
@@ -14,28 +19,27 @@ export function useVaultAccess() {
   const [isVaultAdmin, setIsVaultAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refetch = useCallback(() => {
     if (!tenant || !accessToken) {
       setHasAccess(false);
       setIsVaultAdmin(false);
       setLoading(false);
       return;
     }
-    let cancelled = false;
     setLoading(true);
-
     vaultApi
       .getAccess(tenant.apiSlug, accessToken)
-      .then((res) => {
-        if (cancelled) return;
-        setHasAccess(res.has_access);
-        setIsVaultAdmin(res.is_vault_admin);
-      })
-      .catch(() => { if (!cancelled) { setHasAccess(false); setIsVaultAdmin(false); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
+      .then((res) => { setHasAccess(res.has_access); setIsVaultAdmin(res.is_vault_admin); })
+      .catch(() => { setHasAccess(false); setIsVaultAdmin(false); })
+      .finally(() => setLoading(false));
   }, [tenant, accessToken]);
+
+  useEffect(() => { refetch(); }, [refetch]);
+
+  useEffect(() => {
+    window.addEventListener(VAULT_ACCESS_CHANGED_EVENT, refetch);
+    return () => window.removeEventListener(VAULT_ACCESS_CHANGED_EVENT, refetch);
+  }, [refetch]);
 
   return { hasAccess, isVaultAdmin, loading };
 }

@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
 import { CostConnectWizard } from "@/components/CostConnectWizard";
+import { VaultActivationWizard } from "@/components/VaultActivationWizard";
 import { useVaultAccess } from "@/hooks/useVaultAccess";
 import {
   Cpu, Users, ListTree, Sparkles, BookOpen, ShoppingCart,
@@ -113,6 +114,7 @@ export default function Modulos() {
   const [error, setError] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [vaultWizardOpen, setVaultWizardOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!tenant?.apiSlug || !accessToken) return;
@@ -138,6 +140,14 @@ export default function Modulos() {
     // que valida la cuenta contra Meta antes de activar nada.
     if (next && mod.requires_connection && !mod.connected) {
       setWizardOpen(true);
+      return;
+    }
+
+    // "vault": la ACTIVACIÓN pasa por su propio wizard (explica la
+    // funcionalidad y pide la passphrase ahí mismo) en vez de prenderse
+    // en seco — el módulo se activa desde adentro del wizard, no acá.
+    if (next && mod.id === "vault") {
+      setVaultWizardOpen(true);
       return;
     }
 
@@ -224,6 +234,15 @@ export default function Modulos() {
           apiSlug={tenant.apiSlug}
           onClose={() => setWizardOpen(false)}
           onConnected={load}
+        />
+      )}
+
+      {vaultWizardOpen && tenant?.apiSlug && accessToken && (
+        <VaultActivationWizard
+          tenantId={tenant.apiSlug}
+          accessToken={accessToken}
+          onClose={() => setVaultWizardOpen(false)}
+          onActivated={load}
         />
       )}
     </div>
