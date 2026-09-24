@@ -57,7 +57,10 @@ export interface VaultItemDto {
 
 export const vaultApi = {
   getAccess: (tenantId: string, token: string | null) =>
-    req<{ has_access: boolean }>(`/api/portal/vault/access?tenant_id=${encodeURIComponent(tenantId)}`, token),
+    req<{ has_access: boolean; is_vault_admin: boolean }>(
+      `/api/portal/vault/access?tenant_id=${encodeURIComponent(tenantId)}`,
+      token,
+    ),
 
   getIdentity: (tenantId: string, token: string | null) =>
     req<VaultIdentityDto>(`/api/portal/vault/identity?tenant_id=${encodeURIComponent(tenantId)}`, token),

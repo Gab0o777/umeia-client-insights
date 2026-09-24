@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SectionHeader } from "@/components/SectionHeader";
 import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
 import { CostConnectWizard } from "@/components/CostConnectWizard";
+import { useVaultAccess } from "@/hooks/useVaultAccess";
 import {
   Cpu, Users, ListTree, Sparkles, BookOpen, ShoppingCart,
   Clock, Tag, Zap, DollarSign, Megaphone, CheckCircle2, MinusCircle, LucideIcon, ShieldCheck,
@@ -64,8 +65,11 @@ function ToggleSwitch({ on, busy, onToggle }: { on: boolean; busy: boolean; onTo
 }
 
 function ModuleCard({
-  mod, busy, onToggle, onReconnect,
-}: { mod: ModuleInfo; busy: boolean; onToggle: (m: ModuleInfo) => void; onReconnect?: (m: ModuleInfo) => void }) {
+  mod, busy, onToggle, onReconnect, canToggle,
+}: {
+  mod: ModuleInfo; busy: boolean; onToggle: (m: ModuleInfo) => void; onReconnect?: (m: ModuleInfo) => void;
+  canToggle: boolean;
+}) {
   const Icon = MODULE_ICONS[mod.id] ?? Cpu;
   return (
     <div className={cn("premium-card p-5", mod.active ? "border-success/30" : "opacity-70")}>
@@ -76,7 +80,7 @@ function ModuleCard({
         )}>
           <Icon size={18} />
         </div>
-        {mod.togglable ? (
+        {mod.togglable && canToggle ? (
           <ToggleSwitch on={mod.active} busy={busy} onToggle={() => onToggle(mod)} />
         ) : (
           <span className={cn(
@@ -103,6 +107,7 @@ function ModuleCard({
 
 export default function Modulos() {
   const { tenant, accessToken, logout } = useAuth();
+  const { isVaultAdmin } = useVaultAccess();
   const [data, setData] = useState<ModulesResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -197,7 +202,7 @@ export default function Modulos() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activos.map(m => (
-              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} />
+              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle={m.id === "vault" ? isVaultAdmin : true} />
             ))}
           </div>
 
@@ -206,7 +211,7 @@ export default function Modulos() {
               <p className="text-xs text-muted-foreground font-medium mb-3">Disponibles (no contratados)</p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {inactivos.map(m => (
-                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} />
+                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle={m.id === "vault" ? isVaultAdmin : true} />
                 ))}
               </div>
             </div>
