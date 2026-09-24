@@ -44,6 +44,14 @@ const ARGON2ID_PARAMS = {
   hashLength: 32,
 } as const;
 
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 export async function deriveKek(secret: string, salt: Uint8Array): Promise<Uint8Array> {
   const hex = await argon2id({
     password: secret,
@@ -51,7 +59,7 @@ export async function deriveKek(secret: string, salt: Uint8Array): Promise<Uint8
     ...ARGON2ID_PARAMS,
     outputType: "hex",
   });
-  return Uint8Array.from(Buffer.from(hex, "hex"));
+  return hexToBytes(hex);
 }
 
 export function generateSalt(): Uint8Array {
