@@ -2,35 +2,29 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { vaultApi } from "@/lib/vaultApi";
 
-/** Dispatched after activating the vault module (or granting/revoking
- * access) so every mounted useVaultAccess() (e.g. the sidebar) picks up
- * the change immediately instead of only after a full page reload. */
+/** Dispatched after activating the vault module so every mounted
+ * useVaultAccess() (e.g. the sidebar) picks up the change immediately
+ * instead of only after a full page reload. */
 export const VAULT_ACCESS_CHANGED_EVENT = "vault-access-changed";
 
-/**
- * hasAccess: grant AND tenant module both on — gates the Bóveda nav/page.
- * isVaultAdmin: grant alone, independent of the module — a vault-admin
- * needs this to be true BEFORE the module is active, to see/use the
- * toggle switch in Módulos that turns it on in the first place.
- */
+/** hasAccess: tenant module enabled — gates the Bóveda nav/page for every
+ * portal user in the tenant, no per-user grant anymore. */
 export function useVaultAccess() {
   const { tenant, accessToken } = useAuth();
   const [hasAccess, setHasAccess] = useState(false);
-  const [isVaultAdmin, setIsVaultAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(() => {
     if (!tenant || !accessToken) {
       setHasAccess(false);
-      setIsVaultAdmin(false);
       setLoading(false);
       return;
     }
     setLoading(true);
     vaultApi
       .getAccess(tenant.apiSlug, accessToken)
-      .then((res) => { setHasAccess(res.has_access); setIsVaultAdmin(res.is_vault_admin); })
-      .catch(() => { setHasAccess(false); setIsVaultAdmin(false); })
+      .then((res) => setHasAccess(res.has_access))
+      .catch(() => setHasAccess(false))
       .finally(() => setLoading(false));
   }, [tenant, accessToken]);
 
@@ -41,5 +35,5 @@ export function useVaultAccess() {
     return () => window.removeEventListener(VAULT_ACCESS_CHANGED_EVENT, refetch);
   }, [refetch]);
 
-  return { hasAccess, isVaultAdmin, loading };
+  return { hasAccess, loading };
 }

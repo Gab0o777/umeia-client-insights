@@ -13,15 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   ShieldCheck, Lock, Unlock, KeyRound, Plus, Trash2, Pencil, Copy, Eye, EyeOff,
-  Loader2, ShieldAlert, Share2, LogOut,
+  Loader2, ShieldAlert, LogOut, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { vaultApi } from "@/lib/vaultApi";
-import { setupVaultIdentity } from "@/lib/vaultSetup";
-import {
-  aesGcmDecrypt, aesGcmEncrypt, base64ToBytes, bytesToBase64, bytesToUtf8, deriveKek,
-  openSealedBox, sealForRecipient, utf8ToBytes,
-} from "@/lib/vaultCrypto";
+import { legacyVaultApi } from "@/lib/legacyVaultApi";
+import { bootstrapVault, rotateVaultPassphrase, unlockVault } from "@/lib/vaultSetup";
+import { aesGcmDecrypt, aesGcmEncrypt, base64ToBytes, bytesToBase64, bytesToUtf8, utf8ToBytes } from "@/lib/vaultCrypto";
+import { VaultLegacyMigration } from "@/components/VaultLegacyMigration";
 
 interface ItemPayload {
   title: string;
@@ -33,24 +32,26 @@ interface ItemPayload {
 
 const EMPTY_ITEM: ItemPayload = { title: "", username: "", password: "", url: "", notes: "" };
 
-type Phase = "loading" | "no-access" | "setup" | "locked" | "unlocked";
+type Phase = "loading" | "no-access" | "setup" | "legacy-migration" | "locked" | "unlocked";
 
 export default function Boveda() {
   const { tenant, accessToken } = useAuth();
   const { hasAccess, loading: accessLoading } = useVaultAccess();
 
   const [phase, setPhase] = useState<Phase>("loading");
-  const [privateKey, setPrivateKey] = useState<Uint8Array | null>(null);
   const [dek, setDek] = useState<Uint8Array | null>(null);
+  const [secretVersion, setSecretVersion] = useState<number | null>(null);
 
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [unlockPassphrase, setUnlockPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+
+  const [rotateOpen, setRotateOpen] = useState(false);
+  const [newPassphrase, setNewPassphrase] = useState("");
+  const [confirmNewPassphrase, setConfirmNewPassphrase] = useState("");
 
   const [items, setItems] = useState<Array<{ id: number; data: ItemPayload }>>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [editing, setEditing] = useState<{ id: number | null; data: ItemPayload } | null>(null);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
 
@@ -61,70 +62,46 @@ export default function Boveda() {
     if (!hasAccess) { setPhase("no-access"); return; }
     if (!tenantId || !accessToken) return;
 
-    vaultApi.getIdentity(tenantId, accessToken)
-      .then((identity) => setPhase(identity.exists ? "locked" : "setup"))
+    vaultApi.getSecret(tenantId, accessToken)
+      .then(async (secret) => {
+        if (secret.exists) { setPhase("locked"); return; }
+        try {
+          const legacyIdentity = await legacyVaultApi.getIdentity(tenantId, accessToken);
+          setPhase(legacyIdentity.exists ? "legacy-migration" : "setup");
+        } catch {
+          setPhase("setup");
+        }
+      })
       .catch(() => toast.error("No pudimos cargar tu bóveda. Probá de nuevo."));
   }, [accessLoading, hasAccess, tenantId, accessToken]);
 
-  // ── setup: create a brand new vault identity ──────────────────────────
+  // ── setup: bootstrap the tenant's shared passphrase ────────────────────
   const handleSetup = useCallback(async () => {
     if (!tenantId || !accessToken) return;
-    if (passphrase.length < 10) { toast.error("Usá al menos 10 caracteres para tu passphrase."); return; }
+    if (passphrase.length < 10) { toast.error("Usá al menos 10 caracteres para la passphrase."); return; }
     if (passphrase !== confirmPassphrase) { toast.error("Las passphrases no coinciden."); return; }
 
     setBusy(true);
     try {
-      const result = await setupVaultIdentity(tenantId, accessToken, passphrase);
-      setPrivateKey(result.privateKey);
-      setRecoveryCode(result.recoveryCode);
-      if (result.dek) {
-        setDek(result.dek);
-        setPhase("unlocked");
-      } else {
-        toast.info("Tu bóveda está lista. Pedile a otro admin que la abra para compartirte el acceso.");
-        setPhase("locked");
-      }
+      const result = await bootstrapVault(tenantId, accessToken, passphrase);
+      setDek(result.dek);
+      setSecretVersion(result.version);
+      setPhase("unlocked");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No pudimos crear tu bóveda.");
+      toast.error(err instanceof Error ? err.message : "No pudimos crear la bóveda.");
     } finally {
       setBusy(false);
     }
   }, [tenantId, accessToken, passphrase, confirmPassphrase]);
 
-  // ── unlock: existing identity, just entering the passphrase ───────────
+  // ── unlock: enter the shared passphrase ────────────────────────────────
   const handleUnlock = useCallback(async () => {
     if (!tenantId || !accessToken) return;
     setBusy(true);
     try {
-      const identity = await vaultApi.getIdentity(tenantId, accessToken);
-      if (!identity.exists) throw new Error("No hay identidad de bóveda todavía.");
-
-      const kek = await deriveKek(unlockPassphrase, base64ToBytes(identity.salt!));
-      const priv = await aesGcmDecrypt(kek, {
-        ciphertext: base64ToBytes(identity.wrapped_private_key_ciphertext!),
-        iv: base64ToBytes(identity.wrapped_private_key_iv!),
-      });
-
-      const dekWrap = await vaultApi.getDekWrap(tenantId, accessToken);
-      if (!dekWrap.exists) {
-        setPrivateKey(priv);
-        toast.info(
-          dekWrap.is_first_admin
-            ? "Todavía no generaste la clave de la bóveda."
-            : "Ningún admin te compartió el acceso todavía.",
-        );
-        setBusy(false);
-        return;
-      }
-
-      const tenantDek = await openSealedBox(priv, {
-        ephemeralPublicKey: base64ToBytes(dekWrap.ephemeral_public_key!),
-        ciphertext: base64ToBytes(dekWrap.ciphertext!),
-        iv: base64ToBytes(dekWrap.iv!),
-      });
-
-      setPrivateKey(priv);
-      setDek(tenantDek);
+      const result = await unlockVault(tenantId, accessToken, unlockPassphrase);
+      setDek(result.dek);
+      setSecretVersion(result.version);
       setPhase("unlocked");
       setUnlockPassphrase("");
     } catch {
@@ -135,12 +112,18 @@ export default function Boveda() {
   }, [tenantId, accessToken, unlockPassphrase]);
 
   const handleLock = () => {
-    setPrivateKey(null);
     setDek(null);
+    setSecretVersion(null);
     setItems([]);
     setRevealed(new Set());
     setPhase("locked");
   };
+
+  const handleLegacyMigrated = useCallback((migratedDek: Uint8Array, version: number) => {
+    setDek(migratedDek);
+    setSecretVersion(version);
+    setPhase("unlocked");
+  }, []);
 
   // ── items: load + decrypt once unlocked ────────────────────────────────
   const loadItems = useCallback(async () => {
@@ -165,35 +148,28 @@ export default function Boveda() {
   useEffect(() => {
     if (phase !== "unlocked") return;
     loadItems();
-    if (tenantId && accessToken) {
-      vaultApi.getPendingRecipients(tenantId, accessToken)
-        .then((r) => setPendingCount(r.pending.length))
-        .catch(() => setPendingCount(0));
-    }
-  }, [phase, loadItems, tenantId, accessToken]);
+  }, [phase, loadItems]);
 
-  const handleShare = useCallback(async () => {
-    if (!tenantId || !accessToken || !dek) return;
+  // ── rotate the shared passphrase ────────────────────────────────────────
+  const handleRotate = useCallback(async () => {
+    if (!tenantId || !accessToken || !dek || secretVersion === null) return;
+    if (newPassphrase.length < 10) { toast.error("Usá al menos 10 caracteres para la nueva passphrase."); return; }
+    if (newPassphrase !== confirmNewPassphrase) { toast.error("Las passphrases no coinciden."); return; }
+
     setBusy(true);
     try {
-      const { pending } = await vaultApi.getPendingRecipients(tenantId, accessToken);
-      for (const recipient of pending) {
-        const sealed = await sealForRecipient(base64ToBytes(recipient.public_key), dek);
-        await vaultApi.putDekWrap(tenantId, accessToken, {
-          vault_identity_id: recipient.vault_identity_id,
-          ephemeral_public_key: bytesToBase64(sealed.ephemeralPublicKey),
-          ciphertext: bytesToBase64(sealed.ciphertext),
-          iv: bytesToBase64(sealed.iv),
-        });
-      }
-      toast.success(`Acceso compartido con ${pending.length} admin(s).`);
-      setPendingCount(0);
-    } catch {
-      toast.error("No pudimos compartir el acceso.");
+      const { version } = await rotateVaultPassphrase(tenantId, accessToken, dek, newPassphrase, secretVersion);
+      setSecretVersion(version);
+      setRotateOpen(false);
+      setNewPassphrase("");
+      setConfirmNewPassphrase("");
+      toast.success("Passphrase cambiada — avisale a los demás cuál es la nueva.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No pudimos cambiar la passphrase.");
     } finally {
       setBusy(false);
     }
-  }, [tenantId, accessToken, dek]);
+  }, [tenantId, accessToken, dek, secretVersion, newPassphrase, confirmNewPassphrase]);
 
   const handleSaveItem = useCallback(async () => {
     if (!tenantId || !accessToken || !dek || !editing) return;
@@ -259,18 +235,28 @@ export default function Boveda() {
         title="Bóveda"
         description="Guardá accesos y contraseñas cifrados de punta a punta — ni siquiera umeia puede leerlos."
         actions={phase === "unlocked" ? (
-          <Button variant="outline" size="sm" onClick={handleLock}>
-            <LogOut className="h-4 w-4 mr-2" /> Bloquear
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setRotateOpen(true)}>
+              <RefreshCw className="h-4 w-4 mr-2" /> Cambiar passphrase
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleLock}>
+              <LogOut className="h-4 w-4 mr-2" /> Bloquear
+            </Button>
+          </div>
         ) : undefined}
       />
+
+      {phase === "legacy-migration" && tenantId && accessToken && (
+        <VaultLegacyMigration tenantId={tenantId} accessToken={accessToken} onMigrated={handleLegacyMigrated} />
+      )}
 
       {phase === "setup" && (
         <Card className="max-w-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Creá tu bóveda</CardTitle>
+            <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Creá la bóveda del equipo</CardTitle>
             <CardDescription>
-              Esta passphrase nunca se manda a nuestros servidores — solo vos podés desbloquear tus accesos con ella.
+              Esta passphrase nunca se manda a nuestros servidores. Es compartida por todo el equipo — cualquiera que
+              la conozca puede desbloquear la bóveda directamente, sin pasos adicionales.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -294,7 +280,7 @@ export default function Boveda() {
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Bóveda bloqueada</CardTitle>
-            <CardDescription>Ingresá tu passphrase para desbloquearla.</CardDescription>
+            <CardDescription>Ingresá la passphrase del equipo para desbloquearla.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -318,17 +304,6 @@ export default function Boveda() {
             <Lock className="h-3.5 w-3.5 text-accent shrink-0" />
             Todo se cifra en tu navegador antes de salir de tu computadora — ni el equipo de Umeia puede ver tus contraseñas.
           </div>
-
-          {pendingCount > 0 && (
-            <Card className="border-amber-500/30 bg-amber-500/5">
-              <CardContent className="flex items-center justify-between py-4">
-                <span className="text-sm">{pendingCount} admin(s) esperando que compartas el acceso.</span>
-                <Button size="sm" variant="outline" disabled={busy} onClick={handleShare}>
-                  <Share2 className="h-4 w-4 mr-2" /> Compartir
-                </Button>
-              </CardContent>
-            </Card>
-          )}
 
           <div className="flex justify-end">
             <Button size="sm" onClick={() => setEditing({ id: null, data: { ...EMPTY_ITEM } })}>
@@ -381,23 +356,31 @@ export default function Boveda() {
         </div>
       )}
 
-      <Dialog open={!!recoveryCode} onOpenChange={(open) => !open && setRecoveryCode(null)}>
+      <Dialog open={rotateOpen} onOpenChange={(open) => { if (!open) { setRotateOpen(false); setNewPassphrase(""); setConfirmNewPassphrase(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Guardá tu recovery key</DialogTitle>
+            <DialogTitle>Cambiar la passphrase compartida</DialogTitle>
             <DialogDescription>
-              Si olvidás tu passphrase, esta es la ÚNICA forma de recuperar tu bóveda. Umeia no la guarda — copiala y
-              guardala en un lugar seguro ahora, no se vuelve a mostrar.
+              Los accesos guardados no cambian, solo la passphrase para desbloquear la bóveda. Avisale a los demás la
+              nueva passphrase por otro canal — sesiones ya desbloqueadas no se cierran, pero para volver a entrar
+              van a necesitar la nueva.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2 rounded-md border bg-muted p-3 font-mono text-sm break-all">
-            {recoveryCode}
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="new-pp">Nueva passphrase</Label>
+              <Input id="new-pp" type="password" value={newPassphrase} onChange={(e) => setNewPassphrase(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="new-pp2">Confirmar nueva passphrase</Label>
+              <Input id="new-pp2" type="password" value={confirmNewPassphrase} onChange={(e) => setConfirmNewPassphrase(e.target.value)} />
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => { copyToClipboard(recoveryCode ?? ""); }}>
-              <Copy className="h-4 w-4 mr-2" /> Copiar
+            <Button variant="outline" onClick={() => setRotateOpen(false)}>Cancelar</Button>
+            <Button disabled={busy} onClick={handleRotate}>
+              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Cambiar
             </Button>
-            <Button variant="outline" onClick={() => setRecoveryCode(null)}>Ya la guardé</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

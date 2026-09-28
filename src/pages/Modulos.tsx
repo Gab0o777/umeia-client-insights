@@ -4,7 +4,6 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
 import { CostConnectWizard } from "@/components/CostConnectWizard";
 import { VaultActivationWizard } from "@/components/VaultActivationWizard";
-import { useVaultAccess } from "@/hooks/useVaultAccess";
 import {
   Cpu, Users, ListTree, Sparkles, BookOpen, ShoppingCart,
   Clock, Tag, Zap, DollarSign, Megaphone, CheckCircle2, MinusCircle, LucideIcon, ShieldCheck,
@@ -108,7 +107,6 @@ function ModuleCard({
 
 export default function Modulos() {
   const { tenant, accessToken, logout } = useAuth();
-  const { isVaultAdmin } = useVaultAccess();
   const [data, setData] = useState<ModulesResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -212,7 +210,7 @@ export default function Modulos() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activos.map(m => (
-              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle={m.id === "vault" ? isVaultAdmin : true} />
+              <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle />
             ))}
           </div>
 
@@ -221,7 +219,7 @@ export default function Modulos() {
               <p className="text-xs text-muted-foreground font-medium mb-3">Disponibles (no contratados)</p>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {inactivos.map(m => (
-                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle={m.id === "vault" ? isVaultAdmin : true} />
+                  <ModuleCard key={m.id} mod={m} busy={togglingId === m.id} onToggle={handleToggle} onReconnect={() => setWizardOpen(true)} canToggle />
                 ))}
               </div>
             </div>

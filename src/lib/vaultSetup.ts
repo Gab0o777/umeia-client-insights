@@ -1,72 +1,110 @@
 /**
  * src/lib/vaultSetup.ts
  * ~~~~~~~~~~~~~~~~~~~~~
- * One-time vault identity onboarding: passphrase -> keypair -> recovery key
- * -> tenant DEK (bootstrapped if this is the first admin, inherited if
- * another admin already unlocked and shared it). Shared by the activation
- * wizard (Modulos.tsx, module currently off) and the Bóveda page's own
- * setup screen (a second admin whose grant/module are already active).
+ * Bootstrap/unlock/rotation for the tenant's single shared vault passphrase.
+ * Any portal user in the tenant can bootstrap (if nobody has yet) or unlock
+ * (with the same passphrase everyone else uses) — there is no per-user
+ * identity and no "share with this person" step anymore.
  */
 import { vaultApi } from "@/lib/vaultApi";
 import {
-  aesGcmEncrypt, base64ToBytes, bytesToBase64, deriveKek, generateDek, generateKeypair,
-  generateRecoverySecret, generateSalt, openSealedBox, sealForRecipient,
+  VAULT_RECOVERY_PUBLIC_KEY_B64,
+  aesGcmDecrypt, aesGcmEncrypt, base64ToBytes, bytesToBase64, deriveKek, generateDek,
+  generateSalt, sealForRecipient,
 } from "@/lib/vaultCrypto";
 
-export interface VaultSetupResult {
-  privateKey: Uint8Array;
-  /** null when granted but nobody with the vault already unlocked has shared the DEK yet. */
-  dek: Uint8Array | null;
-  recoveryCode: string;
-}
-
-export async function setupVaultIdentity(
+/**
+ * Bootstraps the tenant's shared secret around `dek` (a freshly generated
+ * one for a brand-new tenant, or a DEK recovered from the legacy per-user
+ * scheme during migration — see VaultLegacyMigration.tsx — so existing
+ * items stay decryptable either way).
+ */
+async function bootstrapVaultWithDek(
   tenantId: string,
   accessToken: string,
   passphrase: string,
-): Promise<VaultSetupResult> {
+  dek: Uint8Array,
+): Promise<{ dek: Uint8Array; version: number }> {
   const salt = generateSalt();
   const kek = await deriveKek(passphrase, salt);
-  const keypair = generateKeypair();
-  const wrapped = await aesGcmEncrypt(kek, keypair.privateKey);
+  const wrapped = await aesGcmEncrypt(kek, dek);
 
-  const recovery = generateRecoverySecret();
-  const recoverySalt = generateSalt();
-  const recoveryKek = await deriveKek(recovery, recoverySalt);
-  const wrappedForRecovery = await aesGcmEncrypt(recoveryKek, keypair.privateKey);
+  const recoverySealed = await sealForRecipient(base64ToBytes(VAULT_RECOVERY_PUBLIC_KEY_B64), dek);
 
-  const created = await vaultApi.createIdentity(tenantId, accessToken, {
+  const created = await vaultApi.bootstrapSecret(tenantId, accessToken, {
     salt: bytesToBase64(salt),
-    public_key: bytesToBase64(keypair.publicKey),
-    wrapped_private_key_ciphertext: bytesToBase64(wrapped.ciphertext),
-    wrapped_private_key_iv: bytesToBase64(wrapped.iv),
-    recovery_salt: bytesToBase64(recoverySalt),
-    recovery_wrapped_private_key_ciphertext: bytesToBase64(wrappedForRecovery.ciphertext),
-    recovery_wrapped_private_key_iv: bytesToBase64(wrappedForRecovery.iv),
+    wrapped_dek_ciphertext: bytesToBase64(wrapped.ciphertext),
+    wrapped_dek_iv: bytesToBase64(wrapped.iv),
+    recovery_ephemeral_public_key: bytesToBase64(recoverySealed.ephemeralPublicKey),
+    recovery_ciphertext: bytesToBase64(recoverySealed.ciphertext),
+    recovery_iv: bytesToBase64(recoverySealed.iv),
   });
 
-  const dekWrap = await vaultApi.getDekWrap(tenantId, accessToken);
+  return { dek, version: created.version! };
+}
 
-  if (!dekWrap.exists && dekWrap.is_first_admin) {
-    const dek = generateDek();
-    const sealed = await sealForRecipient(keypair.publicKey, dek);
-    await vaultApi.putDekWrap(tenantId, accessToken, {
-      vault_identity_id: created.vault_identity_id,
-      ephemeral_public_key: bytesToBase64(sealed.ephemeralPublicKey),
-      ciphertext: bytesToBase64(sealed.ciphertext),
-      iv: bytesToBase64(sealed.iv),
-    });
-    return { privateKey: keypair.privateKey, dek, recoveryCode: recovery };
-  }
+export async function bootstrapVault(
+  tenantId: string,
+  accessToken: string,
+  passphrase: string,
+): Promise<{ dek: Uint8Array; version: number }> {
+  return bootstrapVaultWithDek(tenantId, accessToken, passphrase, generateDek());
+}
 
-  if (dekWrap.exists) {
-    const dek = await openSealedBox(keypair.privateKey, {
-      ephemeralPublicKey: base64ToBytes(dekWrap.ephemeral_public_key!),
-      ciphertext: base64ToBytes(dekWrap.ciphertext!),
-      iv: base64ToBytes(dekWrap.iv!),
-    });
-    return { privateKey: keypair.privateKey, dek, recoveryCode: recovery };
-  }
+/**
+ * TEMPORARY — Phase A migration window only. Bootstraps the new
+ * shared-passphrase secret reusing a DEK recovered from the legacy
+ * per-user-identity scheme (see VaultLegacyMigration.tsx), instead of
+ * generating a fresh one, so existing items stay decryptable.
+ */
+export async function migrateVaultToSharedPassphrase(
+  tenantId: string,
+  accessToken: string,
+  newPassphrase: string,
+  recoveredDek: Uint8Array,
+): Promise<{ dek: Uint8Array; version: number }> {
+  return bootstrapVaultWithDek(tenantId, accessToken, newPassphrase, recoveredDek);
+}
 
-  return { privateKey: keypair.privateKey, dek: null, recoveryCode: recovery };
+/** Throws if `passphrase` is wrong (AES-GCM auth tag failure). */
+export async function unlockVault(
+  tenantId: string,
+  accessToken: string,
+  passphrase: string,
+): Promise<{ dek: Uint8Array; version: number }> {
+  const secret = await vaultApi.getSecret(tenantId, accessToken);
+  if (!secret.exists) throw new Error("La bóveda todavía no fue inicializada.");
+
+  const kek = await deriveKek(passphrase, base64ToBytes(secret.salt!));
+  const dek = await aesGcmDecrypt(kek, {
+    ciphertext: base64ToBytes(secret.wrapped_dek_ciphertext!),
+    iv: base64ToBytes(secret.wrapped_dek_iv!),
+  });
+  return { dek, version: secret.version! };
+}
+
+/**
+ * Re-wraps the SAME dek under a brand-new passphrase/salt. `expectedVersion`
+ * must be the version last fetched via getSecret/unlockVault/bootstrapVault
+ * — a mismatch means someone else rotated first (409), caller should
+ * refetch and retry.
+ */
+export async function rotateVaultPassphrase(
+  tenantId: string,
+  accessToken: string,
+  dek: Uint8Array,
+  newPassphrase: string,
+  expectedVersion: number,
+): Promise<{ version: number }> {
+  const salt = generateSalt();
+  const kek = await deriveKek(newPassphrase, salt);
+  const wrapped = await aesGcmEncrypt(kek, dek);
+
+  const updated = await vaultApi.rotateSecret(tenantId, accessToken, {
+    expected_version: expectedVersion,
+    salt: bytesToBase64(salt),
+    wrapped_dek_ciphertext: bytesToBase64(wrapped.ciphertext),
+    wrapped_dek_iv: bytesToBase64(wrapped.iv),
+  });
+  return { version: updated.version! };
 }

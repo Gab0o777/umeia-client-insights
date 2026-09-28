@@ -3,8 +3,8 @@
  * ~~~~~~~~~~~~~~~~~~~
  * Thin client for /api/portal/vault/* (core/api/portal_vault.py). Every
  * value that goes over the wire here is already ciphertext, produced by
- * src/lib/vaultCrypto.ts — this module never sees a passphrase, a private
- * key, or item plaintext.
+ * src/lib/vaultCrypto.ts — this module never sees a passphrase or item
+ * plaintext.
  */
 import { API_BASE, authHeaders } from "@/lib/apiClient";
 
@@ -20,30 +20,17 @@ async function req<T>(path: string, token: string | null, init?: RequestInit): P
   return res.json();
 }
 
-export interface VaultIdentityDto {
+export interface VaultSecretDto {
   exists: boolean;
-  portal_user_email?: string;
   salt?: string;
-  public_key?: string;
-  wrapped_private_key_ciphertext?: string;
-  wrapped_private_key_iv?: string;
-  recovery_salt?: string;
-  recovery_wrapped_private_key_ciphertext?: string;
-  recovery_wrapped_private_key_iv?: string;
-}
-
-export interface DekWrapDto {
-  exists: boolean;
-  is_first_admin?: boolean;
-  ephemeral_public_key?: string;
-  ciphertext?: string;
-  iv?: string;
-}
-
-export interface PendingRecipient {
-  vault_identity_id: number;
-  portal_user_email: string;
-  public_key: string;
+  wrapped_dek_ciphertext?: string;
+  wrapped_dek_iv?: string;
+  recovery_ephemeral_public_key?: string;
+  recovery_ciphertext?: string;
+  recovery_iv?: string;
+  version?: number;
+  updated_at?: string;
+  updated_by_email?: string | null;
 }
 
 export interface VaultItemDto {
@@ -57,52 +44,33 @@ export interface VaultItemDto {
 
 export const vaultApi = {
   getAccess: (tenantId: string, token: string | null) =>
-    req<{ has_access: boolean; is_vault_admin: boolean }>(
+    req<{ has_access: boolean }>(
       `/api/portal/vault/access?tenant_id=${encodeURIComponent(tenantId)}`,
       token,
     ),
 
-  getIdentity: (tenantId: string, token: string | null) =>
-    req<VaultIdentityDto>(`/api/portal/vault/identity?tenant_id=${encodeURIComponent(tenantId)}`, token),
+  getSecret: (tenantId: string, token: string | null) =>
+    req<VaultSecretDto>(`/api/portal/vault/secret?tenant_id=${encodeURIComponent(tenantId)}`, token),
 
-  createIdentity: (
+  bootstrapSecret: (
     tenantId: string,
     token: string | null,
-    body: Omit<VaultIdentityDto, "exists" | "portal_user_email">,
+    body: Omit<VaultSecretDto, "exists" | "version" | "updated_at" | "updated_by_email">,
   ) =>
-    req<{ ok: boolean; vault_identity_id: number }>(`/api/portal/vault/identity`, token, {
+    req<VaultSecretDto>(`/api/portal/vault/secret`, token, {
       method: "POST",
       body: JSON.stringify({ tenant_id: tenantId, ...body }),
     }),
 
-  rewrapPassphrase: (
+  rotateSecret: (
     tenantId: string,
     token: string | null,
-    body: { salt: string; wrapped_private_key_ciphertext: string; wrapped_private_key_iv: string },
+    body: { expected_version: number; salt: string; wrapped_dek_ciphertext: string; wrapped_dek_iv: string },
   ) =>
-    req<{ ok: boolean }>(`/api/portal/vault/identity/passphrase`, token, {
+    req<VaultSecretDto>(`/api/portal/vault/secret`, token, {
       method: "PATCH",
       body: JSON.stringify({ tenant_id: tenantId, ...body }),
     }),
-
-  getDekWrap: (tenantId: string, token: string | null) =>
-    req<DekWrapDto>(`/api/portal/vault/dek-wrap?tenant_id=${encodeURIComponent(tenantId)}`, token),
-
-  putDekWrap: (
-    tenantId: string,
-    token: string | null,
-    body: { vault_identity_id: number; ephemeral_public_key: string; ciphertext: string; iv: string },
-  ) =>
-    req<{ ok: boolean }>(`/api/portal/vault/dek-wrap`, token, {
-      method: "PATCH",
-      body: JSON.stringify({ tenant_id: tenantId, ...body }),
-    }),
-
-  getPendingRecipients: (tenantId: string, token: string | null) =>
-    req<{ pending: PendingRecipient[] }>(
-      `/api/portal/vault/pending-recipients?tenant_id=${encodeURIComponent(tenantId)}`,
-      token,
-    ),
 
   listItems: (tenantId: string, token: string | null) =>
     req<{ items: VaultItemDto[] }>(`/api/portal/vault/items?tenant_id=${encodeURIComponent(tenantId)}`, token),

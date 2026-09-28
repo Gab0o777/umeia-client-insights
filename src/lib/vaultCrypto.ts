@@ -3,23 +3,31 @@
  * ~~~~~~~~~~~~~~~~~~~~~~
  * Client-side crypto for the E2EE vault. Everything here runs in the
  * browser; the backend only ever stores the outputs of these functions
- * (salts, public keys, ciphertext, nonces) and never sees a passphrase,
- * a private key, the DEK, or item plaintext.
+ * (salt, wrapped DEK, ciphertext, nonces) and never sees a passphrase,
+ * the DEK, or item plaintext.
  *
  * Key hierarchy:
- *   passphrase --Argon2id(salt)--> KEK --AES-GCM--> wraps the user's
- *   X25519 private key. The tenant's DEK is sealed once per vault-admin
- *   using each admin's X25519 public key, so granting access to a new
- *   admin never requires the server (or any other admin) to see a
- *   private key or the DEK in plaintext.
+ *   shared passphrase --Argon2id(salt)--> KEK --AES-GCM--> wraps the
+ *   tenant's single DEK. Every portal user in the tenant unlocks with
+ *   the SAME passphrase — there is no per-user identity or per-user
+ *   share step.
  *
- * A recovery key follows the exact same wrapping shape as the passphrase
- * (its own random secret -> Argon2id -> KEK -> wraps the same private
- * key under a second salt) so losing the passphrase doesn't require
- * re-issuing a new identity/keypair.
+ * The DEK is additionally sealed once, at bootstrap time, to Umeia's own
+ * recovery public key (sealForRecipient below) so the Umeia team can
+ * recover a tenant's vault in a genuine emergency (see
+ * umeiacore/scripts/vault_emergency_recover.py) — the corresponding
+ * private key is held outside this app entirely.
  */
 import { argon2id } from "hash-wasm";
 import { x25519 } from "@noble/curves/ed25519.js";
+
+/**
+ * Umeia's vault recovery public key (not secret — this is the PUBLIC half
+ * of a keypair generated once via umeiacore/scripts/generate_vault_recovery_keypair.py).
+ * The matching private key is stored only in the Umeia team's password
+ * manager, never in any repo or .env — see scripts/vault_emergency_recover.py.
+ */
+export const VAULT_RECOVERY_PUBLIC_KEY_B64 = "+XG3SVhdubYN/yObKGpWRzKnNC7oY8y5JL1FqYD66yE=";
 
 export interface WrappedBlob {
   iv: Uint8Array;
@@ -30,11 +38,6 @@ export interface SealedBox {
   ephemeralPublicKey: Uint8Array;
   iv: Uint8Array;
   ciphertext: Uint8Array;
-}
-
-export interface VaultKeypair {
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
 }
 
 const ARGON2ID_PARAMS = {
@@ -66,19 +69,8 @@ export function generateSalt(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16));
 }
 
-export function generateKeypair(): VaultKeypair {
-  const privateKey = x25519.utils.randomSecretKey();
-  return { privateKey, publicKey: x25519.getPublicKey(privateKey) };
-}
-
 export function generateDek(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
-}
-
-/** Generates a high-entropy recovery secret, e.g. to render once as a printable code. */
-export function generateRecoverySecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function aesGcmEncrypt(key: Uint8Array, plaintext: Uint8Array): Promise<WrappedBlob> {
