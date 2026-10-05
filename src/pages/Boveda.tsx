@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useVaultAccess } from "@/hooks/useVaultAccess";
 import { SectionHeader } from "@/components/SectionHeader";
-import { KpiSkeleton, EmptyData } from "@/components/Skeleton";
+import { KpiSkeleton } from "@/components/Skeleton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ShieldCheck, Lock, Unlock, KeyRound, Plus, Trash2, Pencil, Copy, Eye, EyeOff,
-  Loader2, ShieldAlert, LogOut, RefreshCw,
+  Loader2, ShieldAlert, LogOut, RefreshCw, User, Link2, Type, Hash, StickyNote, Globe,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { vaultApi } from "@/lib/vaultApi";
 import { legacyVaultApi } from "@/lib/legacyVaultApi";
@@ -30,6 +31,26 @@ import {
 } from "@/lib/vaultItem";
 
 type Phase = "loading" | "no-access" | "setup" | "legacy-migration" | "locked" | "unlocked";
+
+// An icon per field type — gives each row an at-a-glance identity.
+const FIELD_ICON: Record<FieldType, LucideIcon> = {
+  username: User,
+  password: KeyRound,
+  url: Link2,
+  text: Type,
+  number: Hash,
+  note: StickyNote,
+};
+
+// Label + hint shown in the "Agregar campo" menu.
+const ADD_FIELD_META: Record<FieldType, { hint: string }> = {
+  username: { hint: "" },
+  password: { hint: "" },
+  text: { hint: "Una línea de texto" },
+  number: { hint: "PIN, puerto, ID…" },
+  note: { hint: "Texto multilínea" },
+  url: { hint: "Un enlace" },
+};
 
 export default function Boveda() {
   const { tenant, accessToken } = useAuth();
@@ -319,71 +340,102 @@ export default function Boveda() {
             Todo se cifra en tu navegador antes de salir de tu computadora — ni el equipo de Umeia puede ver tus contraseñas.
           </div>
 
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => setEditing({ id: null, data: newItem() })}>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {items.length === 0
+                ? "Sin accesos guardados"
+                : `${items.length} ${items.length === 1 ? "acceso guardado" : "accesos guardados"}`}
+            </p>
+            <Button onClick={() => setEditing({ id: null, data: newItem() })}>
               <Plus className="h-4 w-4 mr-2" /> Nuevo acceso
             </Button>
           </div>
 
           {items.length === 0 ? (
-            <EmptyData message="Todavía no guardaste ningún acceso." />
+            <div className="rounded-2xl border border-dashed border-border/70 py-16 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                <KeyRound className="h-7 w-7" />
+              </div>
+              <h3 className="text-base font-semibold">Todavía no guardaste ningún acceso</h3>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                Creá tu primera credencial — elegí los campos que necesites y se cifra en tu navegador.
+              </p>
+              <Button className="mt-5" onClick={() => setEditing({ id: null, data: newItem() })}>
+                <Plus className="h-4 w-4 mr-2" /> Nuevo acceso
+              </Button>
+            </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {items.map((item) => (
-                <Card key={item.id}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{item.data.title || "(sin título)"}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {item.data.fields.length === 0 && (
-                      <p className="text-muted-foreground text-xs">(sin campos)</p>
-                    )}
-                    {item.data.fields.map((field) => {
-                      const masked = FIELD_DEFS[field.type].masked;
-                      const revealKey = `${item.id}:${field.id}`;
-                      const isRevealed = revealed.has(revealKey);
-                      if (field.type === "note") {
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((item) => {
+                const urlField = item.data.fields.find((f) => f.type === "url");
+                const LeadIcon = urlField ? Globe : KeyRound;
+                return (
+                  <Card
+                    key={item.id}
+                    className="group flex flex-col border-border/60 transition-all duration-200 hover:border-accent/40 hover:shadow-[var(--shadow-lg)]"
+                  >
+                    <CardHeader className="flex-row items-start gap-3 space-y-0 pb-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[image:var(--gradient-accent)] text-white shadow-[var(--shadow-glow)]">
+                        <LeadIcon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="truncate text-base leading-tight">{item.data.title || "(sin título)"}</CardTitle>
+                        {urlField?.value && <CardDescription className="truncate">{urlField.value}</CardDescription>}
+                      </div>
+                      <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setEditing({ id: item.id, data: item.data })}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteItem(item.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex-1 space-y-1 pb-4">
+                      {item.data.fields.length === 0 && <p className="text-xs text-muted-foreground">Sin campos.</p>}
+                      {item.data.fields.map((field) => {
+                        const def = FIELD_DEFS[field.type];
+                        const FieldIcon = FIELD_ICON[field.type];
+                        const revealKey = `${item.id}:${field.id}`;
+                        const isRevealed = revealed.has(revealKey);
+                        if (field.type === "note") {
+                          return (
+                            <div key={field.id} className="rounded-lg bg-muted/40 px-3 py-2">
+                              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                <FieldIcon className="h-3 w-3" /> {field.label}
+                              </div>
+                              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/90">{field.value || "—"}</p>
+                            </div>
+                          );
+                        }
                         return (
-                          <div key={field.id}>
-                            <span className="text-muted-foreground text-xs">{field.label}</span>
-                            <p className="text-muted-foreground text-xs whitespace-pre-wrap">{field.value}</p>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={field.id} className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <span className="text-muted-foreground text-xs">{field.label}</span>
-                            <div className={`truncate ${masked ? "font-mono" : ""}`}>
-                              {masked && !isRevealed && field.value
-                                ? "••••••••••"
-                                : field.value || <span className="text-muted-foreground">—</span>}
+                          <div key={field.id} className="group/field flex items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-muted/40">
+                            <FieldIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{field.label}</div>
+                              <div className={`truncate text-sm ${def.masked ? "font-mono" : ""}`}>
+                                {def.masked && !isRevealed && field.value
+                                  ? "••••••••••"
+                                  : field.value || <span className="text-muted-foreground">—</span>}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/field:opacity-100">
+                              {def.masked && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => toggleReveal(revealKey)}>
+                                  {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground disabled:opacity-30" disabled={!field.value} onClick={() => copyToClipboard(field.value)}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            {masked && (
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleReveal(revealKey)}>
-                                {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(field.value)}>
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div className="flex justify-end gap-1 pt-2">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing({ id: item.id, data: item.data })}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteItem(item.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -419,65 +471,94 @@ export default function Boveda() {
       </Dialog>
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing?.id === null ? "Nuevo acceso" : "Editar acceso"}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[image:var(--gradient-accent)] text-white">
+                <KeyRound className="h-4 w-4" />
+              </span>
+              {editing?.id === null ? "Nuevo acceso" : "Editar acceso"}
+            </DialogTitle>
+            <DialogDescription>
+              Armá la credencial con los campos que necesites. Se cifra en tu navegador antes de guardarse.
+            </DialogDescription>
           </DialogHeader>
           {editing && (
-            <div className="space-y-3">
-              <div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
                 <Label>Título</Label>
-                <Input value={editing.data.title} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, title: e.target.value } })} />
+                <Input
+                  placeholder="Ej: Acceso a Facebook"
+                  value={editing.data.title}
+                  onChange={(e) => setEditing({ ...editing, data: { ...editing.data, title: e.target.value } })}
+                />
               </div>
 
-              {editing.data.fields.map((field) => {
-                const def = FIELD_DEFS[field.type];
-                const revealKey = `edit:${field.id}`;
-                const isRevealed = revealed.has(revealKey);
-                return (
-                  <div key={field.id} className="space-y-1 rounded-md border border-border/60 p-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="h-7 text-xs font-medium"
-                        value={field.label}
-                        onChange={(e) => updateField(field.id, { label: e.target.value })}
-                      />
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeField(field.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {def.input === "textarea" ? (
-                      <Textarea value={field.value} onChange={(e) => updateField(field.id, { value: e.target.value })} />
-                    ) : (
-                      <div className="flex items-center gap-1">
+              <div className="space-y-2">
+                {editing.data.fields.map((field) => {
+                  const def = FIELD_DEFS[field.type];
+                  const FieldIcon = FIELD_ICON[field.type];
+                  const revealKey = `edit:${field.id}`;
+                  const isRevealed = revealed.has(revealKey);
+                  return (
+                    <div key={field.id} className="group/row rounded-xl border border-border/60 bg-muted/20 p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <FieldIcon className="h-4 w-4 shrink-0 text-accent" />
                         <Input
-                          type={def.masked && !isRevealed ? "password" : def.inputType ?? "text"}
-                          value={field.value}
-                          onChange={(e) => updateField(field.id, { value: e.target.value })}
+                          className="h-6 border-0 bg-transparent px-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground shadow-none focus-visible:ring-0"
+                          value={field.label}
+                          onChange={(e) => updateField(field.id, { label: e.target.value })}
                         />
-                        {def.masked && (
-                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => toggleReveal(revealKey)}>
-                            {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/row:opacity-100"
+                          onClick={() => removeField(field.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {def.input === "textarea" ? (
+                        <Textarea className="bg-background" value={field.value} onChange={(e) => updateField(field.id, { value: e.target.value })} />
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            className="bg-background"
+                            type={def.masked && !isRevealed ? "password" : def.inputType ?? "text"}
+                            value={field.value}
+                            onChange={(e) => updateField(field.id, { value: e.target.value })}
+                          />
+                          {def.masked && (
+                            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground" onClick={() => toggleReveal(revealKey)}>
+                              {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button variant="outline" className="w-full border-dashed">
                     <Plus className="h-4 w-4 mr-2" /> Agregar campo
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {ADDABLE_FIELD_TYPES.map((type) => (
-                    <DropdownMenuItem key={type} onClick={() => addField(type)}>
-                      {FIELD_DEFS[type].label}
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                  {ADDABLE_FIELD_TYPES.map((type) => {
+                    const Icon = FIELD_ICON[type];
+                    return (
+                      <DropdownMenuItem key={type} className="gap-2.5 py-2" onClick={() => addField(type)}>
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex flex-col">
+                          <span className="text-sm leading-tight">{FIELD_DEFS[type].label}</span>
+                          <span className="text-xs text-muted-foreground">{ADD_FIELD_META[type].hint}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
