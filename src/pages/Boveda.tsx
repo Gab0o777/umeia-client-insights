@@ -12,6 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
   ShieldCheck, Lock, Unlock, KeyRound, Plus, Trash2, Pencil, Copy, Eye, EyeOff,
   Loader2, ShieldAlert, LogOut, RefreshCw,
 } from "lucide-react";
@@ -21,16 +24,10 @@ import { legacyVaultApi } from "@/lib/legacyVaultApi";
 import { bootstrapVault, rotateVaultPassphrase, unlockVault } from "@/lib/vaultSetup";
 import { aesGcmDecrypt, aesGcmEncrypt, base64ToBytes, bytesToBase64, bytesToUtf8, utf8ToBytes } from "@/lib/vaultCrypto";
 import { VaultLegacyMigration } from "@/components/VaultLegacyMigration";
-
-interface ItemPayload {
-  title: string;
-  username: string;
-  password: string;
-  url: string;
-  notes: string;
-}
-
-const EMPTY_ITEM: ItemPayload = { title: "", username: "", password: "", url: "", notes: "" };
+import {
+  ADDABLE_FIELD_TYPES, FIELD_DEFS, newField, newItem, normalizeToV2,
+  type FieldType, type ItemPayload, type VaultField,
+} from "@/lib/vaultItem";
 
 type Phase = "loading" | "no-access" | "setup" | "legacy-migration" | "locked" | "unlocked";
 
@@ -53,7 +50,8 @@ export default function Boveda() {
 
   const [items, setItems] = useState<Array<{ id: number; data: ItemPayload }>>([]);
   const [editing, setEditing] = useState<{ id: number | null; data: ItemPayload } | null>(null);
-  const [revealed, setRevealed] = useState<Set<number>>(new Set());
+  // Keyed by `${itemId}:${fieldId}` for the cards and `edit:${fieldId}` for the dialog.
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
 
   const tenantId = tenant?.apiSlug;
 
@@ -136,9 +134,9 @@ export default function Boveda() {
             ciphertext: base64ToBytes(row.ciphertext),
             iv: base64ToBytes(row.iv),
           });
-          return { id: row.id, data: JSON.parse(bytesToUtf8(plain)) as ItemPayload };
+          return { id: row.id, data: normalizeToV2(JSON.parse(bytesToUtf8(plain))) };
         } catch {
-          return { id: row.id, data: { ...EMPTY_ITEM, title: "(no se pudo descifrar)" } };
+          return { id: row.id, data: normalizeToV2(null) };
         }
       }),
     );
@@ -209,13 +207,29 @@ export default function Boveda() {
     setTimeout(() => { navigator.clipboard.writeText("").catch(() => {}); }, 20_000);
   };
 
-  const toggleReveal = (id: number) => {
+  const toggleReveal = (key: string) => {
     setRevealed((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   };
+
+  // ── edit dialog: field helpers ──────────────────────────────────────────
+  const updateField = (id: string, patch: Partial<VaultField>) =>
+    setEditing((prev) =>
+      prev ? { ...prev, data: { ...prev.data, fields: prev.data.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) } } : prev,
+    );
+
+  const removeField = (id: string) =>
+    setEditing((prev) =>
+      prev ? { ...prev, data: { ...prev.data, fields: prev.data.fields.filter((f) => f.id !== id) } } : prev,
+    );
+
+  const addField = (type: FieldType) =>
+    setEditing((prev) =>
+      prev ? { ...prev, data: { ...prev.data, fields: [...prev.data.fields, newField(type)] } } : prev,
+    );
 
   if (accessLoading || phase === "loading") return <KpiSkeleton />;
 
@@ -306,7 +320,7 @@ export default function Boveda() {
           </div>
 
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setEditing({ id: null, data: { ...EMPTY_ITEM } })}>
+            <Button size="sm" onClick={() => setEditing({ id: null, data: newItem() })}>
               <Plus className="h-4 w-4 mr-2" /> Nuevo acceso
             </Button>
           </div>
@@ -319,27 +333,46 @@ export default function Boveda() {
                 <Card key={item.id}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{item.data.title || "(sin título)"}</CardTitle>
-                    {item.data.url && <CardDescription>{item.data.url}</CardDescription>}
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">{item.data.username}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(item.data.username)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono">{revealed.has(item.id) ? item.data.password : "••••••••••"}</span>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleReveal(item.id)}>
-                          {revealed.has(item.id) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(item.data.password)}>
-                          <Copy className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    {item.data.notes && <p className="text-muted-foreground text-xs">{item.data.notes}</p>}
+                    {item.data.fields.length === 0 && (
+                      <p className="text-muted-foreground text-xs">(sin campos)</p>
+                    )}
+                    {item.data.fields.map((field) => {
+                      const masked = FIELD_DEFS[field.type].masked;
+                      const revealKey = `${item.id}:${field.id}`;
+                      const isRevealed = revealed.has(revealKey);
+                      if (field.type === "note") {
+                        return (
+                          <div key={field.id}>
+                            <span className="text-muted-foreground text-xs">{field.label}</span>
+                            <p className="text-muted-foreground text-xs whitespace-pre-wrap">{field.value}</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={field.id} className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-muted-foreground text-xs">{field.label}</span>
+                            <div className={`truncate ${masked ? "font-mono" : ""}`}>
+                              {masked && !isRevealed && field.value
+                                ? "••••••••••"
+                                : field.value || <span className="text-muted-foreground">—</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            {masked && (
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleReveal(revealKey)}>
+                                {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(field.value)}>
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div className="flex justify-end gap-1 pt-2">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing({ id: item.id, data: item.data })}>
                         <Pencil className="h-3.5 w-3.5" />
@@ -396,22 +429,57 @@ export default function Boveda() {
                 <Label>Título</Label>
                 <Input value={editing.data.title} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, title: e.target.value } })} />
               </div>
-              <div>
-                <Label>URL</Label>
-                <Input value={editing.data.url} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, url: e.target.value } })} />
-              </div>
-              <div>
-                <Label>Usuario</Label>
-                <Input value={editing.data.username} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, username: e.target.value } })} />
-              </div>
-              <div>
-                <Label>Contraseña</Label>
-                <Input type="text" value={editing.data.password} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, password: e.target.value } })} />
-              </div>
-              <div>
-                <Label>Notas</Label>
-                <Textarea value={editing.data.notes} onChange={(e) => setEditing({ ...editing, data: { ...editing.data, notes: e.target.value } })} />
-              </div>
+
+              {editing.data.fields.map((field) => {
+                const def = FIELD_DEFS[field.type];
+                const revealKey = `edit:${field.id}`;
+                const isRevealed = revealed.has(revealKey);
+                return (
+                  <div key={field.id} className="space-y-1 rounded-md border border-border/60 p-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        className="h-7 text-xs font-medium"
+                        value={field.label}
+                        onChange={(e) => updateField(field.id, { label: e.target.value })}
+                      />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeField(field.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    {def.input === "textarea" ? (
+                      <Textarea value={field.value} onChange={(e) => updateField(field.id, { value: e.target.value })} />
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type={def.masked && !isRevealed ? "password" : def.inputType ?? "text"}
+                          value={field.value}
+                          onChange={(e) => updateField(field.id, { value: e.target.value })}
+                        />
+                        {def.masked && (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => toggleReveal(revealKey)}>
+                            {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <Plus className="h-4 w-4 mr-2" /> Agregar campo
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {ADDABLE_FIELD_TYPES.map((type) => (
+                    <DropdownMenuItem key={type} onClick={() => addField(type)}>
+                      {FIELD_DEFS[type].label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
           <DialogFooter>
